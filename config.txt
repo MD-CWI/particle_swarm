@@ -1,0 +1,8 @@
+swarm_name = n2_siglo
+gas_crosssec_files = n2_siglo.txt
+swarm_size = 1000
+swarm_fld_range = 1e5 1e7
+swarm_n_flds = 100
+
+td_abs_acc = 1.0, 0.0, 0.0, 5.0e-3, 1.0e1, 1.0e1, 0.0, 0.0
+td_rel_acc = 1.0, 5e-3, 5e-3, 1e-2, 5e-3, 5e-3, 1e-1, 1e-1
