@@ -25,14 +25,12 @@ program particle_swarm
 
    real(dp)          :: init_eV, scale_factor
    real(dp)          :: fld, factor, temp
-   real(dp)          :: td_dev(PM_num_td), td_prev(PM_num_td)
-   real(dp)          :: td(PM_num_td)
-   real(dp)          :: abs_acc(PM_num_td), rel_acc(PM_num_td)
+
+   integer, parameter :: n_pc = 4
+   type(PC_t) :: pcs(n_pc)
    real(dp), allocatable :: all_td(:, :)
 
-   type(PM_part_stats_t) :: ps
-
-   call initialize_all() ! Initialize all necessary modules (routine contained in program)
+   call initialize_all()
 
    ! Initialize variables
    info_cntr     = 0
@@ -54,48 +52,9 @@ program particle_swarm
       temp     = 1.0_dp / scale_factor
       temp     = factor * (max_fld**temp - min_fld**temp) + min_fld**temp
       fld      = temp ** scale_factor
-      n_swarms = 0
-      td_dev   = 0.0_dp
-      td_prev  = 0.0_dp
-      accurate = .false.
-      print *, "Simulating for fld:", fld, "V/m"
 
-      ! Determine a 'good' initial swarm size and the time until energy
-      ! relaxation.
-      call create_swarm(init_eV, fld, tau_swarm, tau_coll, growth_rate, swarm_size)
-      print *, "Swarm relaxation time", tau_swarm
-      print *, "Collision time", tau_coll
-      call PM_update_particle_stats(ps, .true.)
+      call PM_get_swarm_data(pcs(1), fld, all_td(i_fld, :))
 
-      ! Loop over the swarms until converged
-      do while (.not. accurate .or. n_swarms < n_swarms_min)
-         do mm = 1, max(1, nint(tau_swarm / tau_coll))
-            call PM_advance(tau_coll, swarm_size, growth_rate)                  ! Advance the swarm in time
-            call PC_clean_up_dead()
-            call PM_update_particle_stats(ps, .false.)
-         end do
-
-         n_swarms = n_swarms + 1
-         call PM_get_td_from_ps(ps, fld, td)
-         if (n_swarms == 1) then
-            td_prev  = td
-         else
-            weight = 1.0_dp / min(n_swarms-1, n_swarms_min)
-            td_dev   = (1 - weight) * td_dev + &
-                 sqrt(real(n_swarms, dp)) * abs(td - td_prev) * weight
-            td_prev  = td
-            accurate = all(td_dev < abs_acc .or. td_dev < rel_acc * td)
-         end if
-
-         write(*, fmt="(A)", advance="no") "."
-         ! print *, td_dev < abs_acc .or. td_dev < rel_acc * td
-         call PM_collapse_swarm()
-
-         ! Advance over 10 collisions for the diffusion measurements
-         call PM_advance(10 * tau_coll, swarm_size, growth_rate)
-      end do
-
-      all_td(i_fld, :) = td
       write(*,*) ""
       do mm = 1, PM_num_td
          write(*, "(A25,E10.3,A,E8.2)") "   " // PM_td_names(mm), all_td(i_fld, mm), " +- ", &
@@ -127,14 +86,10 @@ contains
       call create_sim_config()      ! Create default parameters for the simulation (routine contained below)
       call CFG_sort()               ! Sort parameters in config module
 
-      ! Use either no configuration file, or the one specified as argument
-      select case (command_argument_count())
-      case (0)
-         continue
-      case (1)
-         call get_command_argument(1, cfg_name)
+      do nn = 1, command_argument_count()
+         call get_command_argument(nn, cfg_name)
          call CFG_read_file(trim(cfg_name))
-      end select
+      end do
 
       call CFG_get("swarm_name", swarm_name)
       call CFG_write("output/" // trim(swarm_name) // "_config.txt")
@@ -154,14 +109,22 @@ contains
 
       do nn = 1, n_gas_comp
          cs_file = CFG_get_string("gas_crosssec_files", nn)
-         call CS_read_file("input/" // trim(cs_file), trim(gas_comp_names(nn)), 1.0_dp, &
-              gas_comp_fracs(nn) * GAS_get_number_dens(), CFG_get_real("part_max_energy_eV"))
+         call CS_add_from_file("input/" // trim(cs_file), &
+              trim(gas_comp_names(nn)), 1.0_dp, &
+              gas_comp_fracs(nn) * GAS_get_number_dens(), &
+              CFG_get_real("part_max_energy_eV"), cross_secs)
       end do
 
-      call CS_get_cross_secs(cross_secs)
       call CS_write_summary("output/" // trim(swarm_name) // "_cs_summary.txt")
-      call CS_write_all("output/" // trim(swarm_name) // "_cs.txt")
-      call PM_initialize(cross_secs)
+
+      call pcs(1)%initialize(UC_elec_mass, cross_secs, &
+              CFG_get_int("part_lkptbl_size"), &
+              CFG_get_real("part_max_energy_eV"), &
+              CFG_get_int("part_max_number_of"))
+
+      do nn = 2, n_pc
+         pcs(nn) = pcs(1)
+      end do
 
    end subroutine initialize_all
 
@@ -198,47 +161,5 @@ contains
       call CFG_add("part_max_number_of", 25*1000*1000, "The maximum number of particles allowed per task")
       call CFG_add("part_max_energy_eV", 1000.0_DP, "The maximum energy in eV for particles in the simulation")
    end subroutine create_sim_config
-
-   ! Create a swarm that is relaxed to the electric field
-   subroutine create_swarm(energyEv, fld, tau_swarm, tau_coll, growth_rate, swarm_size)
-      use m_units_constants
-      real(dp), intent(in)  :: fld, energyEv
-      real(dp), intent(out) :: tau_swarm, tau_coll, growth_rate
-      integer, intent(in)   :: swarm_size
-
-      integer, parameter    :: frame_size = 10
-      integer :: i
-      real(dp)              :: dev, nu_hist(frame_size)
-      real(dp) :: mean_nu, stddev, tau
-
-      call PM_new_swarm(swarm_size, fld, energyEv)
-
-      ! Timestep: an electron accelerating from zero velocity gains 1 eV in this time.
-      tau      = 1.0_dp / (sqrt(0.5_dp * UC_elem_charge / UC_elec_mass) * abs(fld))
-      tau_swarm = 0.0_dp
-
-      ! Determine when collision rate is relaxed
-      do
-         do i = 1, frame_size
-            call PM_advance(tau, swarm_size, 0.0_dp)
-            nu_hist(i) = PM_get_avg_coll_rate()
-         end do
-         tau_swarm = tau_swarm + tau * frame_size
-
-         mean_nu = sum(nu_hist)/frame_size
-         stddev = sqrt(sum((nu_hist(2:) - mean_nu)**2) / frame_size)
-         ! Now see whether nu_hist is changing more than stddev in time
-         dev    = abs(nu_hist(1) - nu_hist(frame_size)) / stddev
-         print *, "Relaxation:", dev
-
-         if (dev < 1.0_dp) exit
-      end do
-
-      ! call PM_recenter_swarm()
-      tau_coll = 1 / mean_nu
-      ! Estimate growth rate
-      growth_rate = PM_get_avg_growth_rate()
-
-   end subroutine create_swarm
 
 end program particle_swarm
