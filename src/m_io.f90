@@ -21,8 +21,8 @@ contains
 
       open(UNIT=OutUnit, FILE=filename, IOSTAT=ios)
 
-      i_max_fld = ubound(tData, 1)
-      i_max_td  = ubound(tData, 2)
+      i_max_fld = ubound(tData, 2)
+      i_max_td  = ubound(tData, 1)
 
       ! Write data depending on Efield
       do n = 1, i_max_td
@@ -32,7 +32,7 @@ contains
          write(OutUnit, *) trim(gasName)
          write(OutUnit, *) "------------------------"
          do nE = 1, i_max_fld
-            write(OutUnit, *) tData(nE, EfieldIx), tData(nE, n)
+            write(OutUnit, *) tData(EfieldIx, nE), tData(n, nE)
          end do
          write(OutUnit, *) "------------------------"
       end do
@@ -45,7 +45,7 @@ contains
          write(OutUnit, *) trim(gasName)
          write(OutUnit, *) "------------------------"
          do nE = 1, i_max_fld
-            write(OutUnit, *) tData(nE, energyIx), tData(nE, n)
+            write(OutUnit, *) tData(energyIx, nE), tData(n, nE)
          end do
          write(OutUnit, *) "------------------------"
       end do
@@ -65,8 +65,8 @@ contains
 
       open(UNIT=OutUnit, FILE=filename, IOSTAT=ios)
 
-      i_max_fld = ubound(tData, 1)
-      i_max_td  = ubound(tData, 2)
+      i_max_fld = ubound(tData, 2)
+      i_max_td  = ubound(tData, 1)
 
       ! Write data depending on Efield
       write(OutUnit, *) "# Swarm data"
@@ -77,20 +77,21 @@ contains
       write(OutUnit, *) "#"
       write(OutUnit, *) "# ------------------------"
       do nE = 1, i_max_fld
-         write(OutUnit, *) tData(nE, :)
+         write(OutUnit, *) tData(:, nE)
       end do
 
    end subroutine IO_write_td_cols
 
-   subroutine IO_write_coeffs(filename)
+   subroutine IO_write_coeffs(pc, filename)
       use m_particle_core
+      type(PC_t), intent(in) :: pc
       integer                              :: n_coeffs
       character(len=*), intent(in)         :: filename
 
       real(dp), allocatable                :: coeff_data(:,:)
       character(len=20), allocatable :: coeff_names(:)
 
-      call PC_get_coeffs(coeff_data, coeff_names, n_coeffs)
+      call pc%get_coeffs(coeff_data, coeff_names, n_coeffs)
 
       if (n_coeffs > 0) then
          call write_data_2d(filename, coeff_data, coeff_names, 30, do_transpose = .true.)
