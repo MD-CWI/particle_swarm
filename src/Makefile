@@ -2,8 +2,8 @@ FC 	:= gfortran
 FFLAGS	:= -Wall -fcheck=all -ffpe-trap=invalid,zero,overflow -g -O3 -fopenmp
 OBJS	:= m_particle_swarm.o m_io.o
 
-INCDIRS	:= ../../fosito ../../particle_core
-LIBDIRS := ../../fosito ../../particle_core
+INCDIRS	:= ../fosito ../particle_core
+LIBDIRS := ../fosito ../particle_core
 LIBS	:= particle_core fosito
 
 %.o: 	%.f90
@@ -17,7 +17,7 @@ LIBS	:= particle_core fosito
 all: ../particle_swarm
 
 clean:
-	$(RM) -f *.o *.mod particle_swarm
+	$(RM) -f *.o *.mod ../particle_swarm
 
 # Dependency information
 m_particle_swarm.o:	m_io.o

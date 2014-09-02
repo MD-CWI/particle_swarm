@@ -91,7 +91,6 @@ contains
     cur_size = pc%get_num_sim_part()
 
     if (new_size >= 2 * cur_size) then
-       ! print *, "size", new_size, cur_size
        do
           ! Double particles
           do ix = 1, cur_size
@@ -102,7 +101,6 @@ contains
           if (new_size < 2 * cur_size) exit
        end do
     else if (new_size < cur_size/2) then
-       ! print *, "size", new_size, cur_size
        ! Reduce number of particles
        chance = new_size / real(cur_size, dp)
        do ix = 1, cur_size
@@ -113,17 +111,16 @@ contains
   end subroutine resize_swarm
 
   subroutine update_particle_stats(pc, ps, new_ps)
-    type(PC_t), intent(inout) :: pc
+    type(PC_t), intent(inout)         :: pc
     type(part_stats_t), intent(inout) :: ps
-    logical, intent(in)                  :: new_ps
+    logical, intent(in)               :: new_ps
 
-    integer                              :: ix, num_part
-    real(dp)                             :: inv_n_samples
-    real(dp) :: v(3), v2
-    real(dp) :: coll_rates(PC_max_num_coll)
-    type(PC_part_t)                      :: part
+    integer                           :: ix, num_part
+    real(dp)                          :: inv_n_samples
+    real(dp)                          :: v(3), v2
+    real(dp)                          :: coll_rates(PC_max_num_coll)
+    type(PC_part_t)                   :: part
 
-    ! Recenter particles
     call recenter_swarm(pc)
 
     if (new_ps) then
@@ -204,19 +201,19 @@ contains
   subroutine SWARM_get_data(pc, fld, swarm_size, n_swarms_min, &
        abs_acc, rel_acc, td)
     type(PC_t), intent(inout) :: pc
-    real(dp), intent(in) :: fld
-    integer, intent(in) :: swarm_size, n_swarms_min
-    real(dp), intent(in) :: abs_acc(SWARM_num_td), rel_acc(SWARM_num_td)
-    real(dp), intent(inout) :: td(SWARM_num_td)
+    real(dp), intent(in)      :: fld
+    integer, intent(in)       :: swarm_size, n_swarms_min
+    real(dp), intent(in)      :: abs_acc(SWARM_num_td), rel_acc(SWARM_num_td)
+    real(dp), intent(inout)   :: td(SWARM_num_td)
 
-    integer, parameter :: n_coll_times = 40
-    integer, parameter :: n_coll_times_diff = 20
-    integer            :: n, n_swarms
-    real(dp)           :: tau_coll, weight
-    real(dp)           :: td_dev(SWARM_num_td), td_prev(SWARM_num_td)
-    real(dp)           :: growth_rate
-    logical            :: accurate
-    type(part_stats_t) :: ps
+    integer, parameter        :: n_coll_times      = 40
+    integer, parameter        :: n_coll_times_diff = 20
+    integer                   :: n, n_swarms
+    real(dp)                  :: tau_coll, weight
+    real(dp)                  :: td_dev(SWARM_num_td), td_prev(SWARM_num_td)
+    real(dp)                  :: growth_rate
+    logical                   :: accurate
+    type(part_stats_t)        :: ps
 
     n_swarms = 0
     td_dev   = 0.0_dp
@@ -224,15 +221,14 @@ contains
     accurate = .false.
     ! print *, "Simulating for fld:", fld, "V/m"
 
-    call create_swarm(pc, fld, tau_coll, growth_rate, swarm_size)
-    ! print *, "Collision time", tau_coll
+    call create_swarm(pc, fld, tau_coll, swarm_size)
     call update_particle_stats(pc, ps, .true.)
 
     ! Loop over the swarms until converged
     do while (.not. accurate .or. n_swarms < n_swarms_min)
+       growth_rate = abs(ps%i_rate - ps%a_rate)
        do n = 1, n_coll_times
           call swarm_advance(pc, tau_coll, swarm_size, growth_rate)
-          ! call pc%advance(tau_coll)
           call update_particle_stats(pc, ps, .false.)
        end do
 
@@ -252,24 +248,25 @@ contains
 
        ! Advance over several collisions for the diffusion measurements
        call collapse_swarm(pc)
-       call swarm_advance(pc, tau_coll, swarm_size, growth_rate)
+       call swarm_advance(pc, n_coll_times_diff * tau_coll, &
+            swarm_size, growth_rate)
     end do
   end subroutine SWARM_get_data
 
   ! Create a swarm that is relaxed to the electric field
-  subroutine create_swarm(pc, fld, tau_coll, growth_rate, swarm_size)
+  subroutine create_swarm(pc, fld, tau_coll, swarm_size)
     use m_units_constants
     type(PC_t), intent(inout) :: pc
     real(dp), intent(in)      :: fld
-    real(dp), intent(out)     :: tau_coll, growth_rate
+    real(dp), intent(out)     :: tau_coll
     integer, intent(in)       :: swarm_size
 
     integer, parameter        :: frame_size = 100
-    real(dp), parameter       :: en_eV = 0.1_dp
+    real(dp), parameter       :: en_eV      = 0.1_dp
     integer                   :: i, ll
     real(dp)                  :: en_hist(frame_size), t_hist(frame_size)
     real(dp)                  :: mean_en, correl, stddev, tau
-    real(dp), allocatable :: coll_rates(:), tmp_vec(:)
+    real(dp), allocatable     :: coll_rates(:), tmp_vec(:)
 
     call new_swarm(pc, swarm_size, fld)
 
@@ -286,6 +283,7 @@ contains
     do
        do i = 1, frame_size
           call pc%advance(tau)
+          call resize_swarm(pc, swarm_size)
           en_hist(i) = pc%get_mean_energy() / UC_elec_volt
        end do
 
@@ -303,15 +301,13 @@ contains
     allocate(coll_rates(pc%n_colls))
     allocate(tmp_vec(pc%n_colls))
     coll_rates = 0
+
     do ll = 1, pc%n_part
        call pc%get_coll_rates(norm2(pc%particles(ll)%v), tmp_vec)
-       coll_rates = coll_rates + tmp_vec
+       coll_rates = coll_rates + tmp_vec / pc%n_part
     end do
-    coll_rates = coll_rates / pc%n_part
 
     tau_coll = 1 / sum(coll_rates)
-    growth_rate = sum(coll_rates(pc%ionization_colls)) - &
-         sum(coll_rates(pc%attachment_colls))
   end subroutine create_swarm
 
 end module m_particle_swarm
