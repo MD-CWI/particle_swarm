@@ -164,17 +164,17 @@ contains
     type(part_stats_t), intent(in) :: ps
     real(dp), intent(in)              :: fld
     real(dp), intent(out)             :: td(SWARM_num_td)
-    real(dp)                          :: v_norm
+    real(dp)                          :: drift_vel
 
-    v_norm = norm2(ps%v)
-    td(1) = fld
-    td(2) = 0.5 * UC_elec_mass * ps%v2 / UC_elec_volt ! Energy
-    td(3) = abs(ps%v(3) / fld)                        ! Mobility
-    td(4) = ps%cov_xv(1) / (ps%n_samples)             ! Long. diffusion
-    td(5) = ps%i_rate / v_norm                        ! Ionization
-    td(6) = ps%a_rate / v_norm                        ! Attachment
-    td(7) = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
-    td(8) = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
+    drift_vel = abs(ps%v(3))
+    td(1)     = fld
+    td(2)     = 0.5 * UC_elec_mass * ps%v2 / UC_elec_volt ! Energy
+    td(3)     = abs(drift_vel / fld)                      ! Mobility
+    td(4)     = ps%cov_xv(1) / (ps%n_samples)             ! Long. diffusion
+    td(5)     = ps%i_rate / drift_vel                     ! Ionization
+    td(6)     = ps%a_rate / drift_vel                     ! Attachment
+    td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
+    td(8)     = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
   end subroutine get_td_from_ps
 
   subroutine new_swarm(pc, swarm_size, fld)

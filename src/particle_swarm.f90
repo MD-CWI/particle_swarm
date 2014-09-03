@@ -171,34 +171,50 @@ contains
   subroutine create_sim_config(cfg)
     type(CFG_t), intent(inout) :: cfg
     ! General simulation parameters
-    call CFG_add(cfg, "swarm_fld_range", (/1.0e6_dp, 1.0e7_dp/), "The minimum required electric field")
-    call CFG_add(cfg, "swarm_n_flds", 10, "The minimum required electric field")
-    call CFG_add(cfg, "swarm_fld_scale_factor", 1.0_dp, "The scaling of the electric fields")
-    call CFG_add(cfg, "swarm_name", "my_sim", "The name of the swarm simulation")
-    call CFG_add(cfg, "swarm_min_number", 10, "The minimum number of swarms")
-    call CFG_add(cfg, "swarm_size", 10*1000, "The initial size of a swarm")
+    call CFG_add(cfg, "swarm_fld_range", (/1.0e6_dp, 1.0e7_dp/), &
+         "The minimum required electric field")
+    call CFG_add(cfg, "swarm_n_flds", 10, &
+         "The minimum required electric field")
+    call CFG_add(cfg, "swarm_fld_scale_factor", 1.0_dp, &
+         "The scaling of the electric fields")
+    call CFG_add(cfg, "swarm_name", "my_sim", &
+         "The name of the swarm simulation")
+    call CFG_add(cfg, "swarm_min_number", 10, &
+         "The minimum number of swarms")
+    call CFG_add(cfg, "swarm_size", 1000, &
+         "The initial size of a swarm")
 
-    call CFG_add(cfg, "td_abs_acc", (/1.0_dp, 0.0_dp, 0.0_dp, 1.0e-2_dp, 1.0e1_dp, 1.0e1_dp, 0.0_dp, 0.0_dp/), &
+    call CFG_add(cfg, "td_abs_acc", &
+         (/1.0_dp, 0.0_dp, 0.0_dp, 1.0e-2_dp, 1.0e1_dp, 1.0e1_dp, 0.0_dp, 0.0_dp/), &
          "The required absolute accuracies of the transport data")
-    call CFG_add(cfg, "td_rel_acc", (/1.0_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-1_dp, 1e-1_dp/), &
+    call CFG_add(cfg, "td_rel_acc", &
+         (/1.0_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-1_dp, 1e-1_dp/), &
          "The required relative accuracies of the transport data")
-    call CFG_add(cfg, "init_eV", 1.0_dp, "The initial energy of particles")
+    call CFG_add(cfg, "init_eV", 1.0_dp, &
+         "The initial energy of particles")
 
     ! Gas parameters
-    call CFG_add(cfg, "gas_pressure", 1.0_DP, "The gas pressure (bar)")
-    call CFG_add(cfg, "gas_temperature", 293.0_DP, "The gas temperature (Kelvin)")
-    call CFG_add(cfg, "gas_mixture_name", "N2", "The name of the gas mixture used")
-    call CFG_add(cfg, "gas_components", (/"N2"/), "The names of the gases used in the simulation", .true.)
-    call CFG_add(cfg, "gas_files", (/"cross_sections_nitrogen.txt"/), &
+    call CFG_add(cfg, "gas_pressure", 1.0_dp, &
+         "The gas pressure (bar)")
+    call CFG_add(cfg, "gas_temperature", 293.0_dp, &
+         "The gas temperature (Kelvin)")
+    call CFG_add(cfg, "gas_mixture_name", "N2", &
+         "The name of the gas mixture used")
+    call CFG_add(cfg, "gas_components", (/"N2"/), &
+         "The names of the gases used in the simulation", .true.)
+    call CFG_add(cfg, "gas_files", &
+         (/"cross_sections_nitrogen.txt"/), &
          & "The files in which to find cross section data for each gas", .true.)
     call CFG_add(cfg, "gas_fractions", (/1.0_dp /), &
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
-    ! call CFG_add(cfg, "gas_crosssec_scaling", 1.0_DP, "Scale factor for the cross sections in the input data", .true.)
 
     ! Particle model related parameters
-    call CFG_add(cfg, "part_lkptbl_size", 1*1000, "The size of the lookup table for the collision rates")
-    call CFG_add(cfg, "part_max_number_of", 1000*1000, "The maximum number of particles allowed per task")
-    call CFG_add(cfg, "part_max_energy_ev", 500.0_dp, "The maximum energy in eV for particles in the simulation")
+    call CFG_add(cfg, "part_lkptbl_size", 20*1000, &
+         "The size of the lookup table for the collision rates")
+    call CFG_add(cfg, "part_max_number_of", 1000*1000, &
+         "The maximum number of particles allowed per task")
+    call CFG_add(cfg, "part_max_energy_ev", 900.0_dp, &
+         "The maximum energy in eV for particles in the simulation")
   end subroutine create_sim_config
 
 end program particle_swarm
