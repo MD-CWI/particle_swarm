@@ -5,8 +5,8 @@ gas_components = N2
 gas_fractions = 1.0
 swarm_size = 1000
 part_max_number_of = 10000
-swarm_fld_range = 1e5 4e7
-swarm_n_flds = 40
+swarm_fld = 1e7
+part_lkptbl_size = 10000
 
 td_abs_acc = 1.0, 0.0,    0.0,    0.0, 1.0e1,  1.0e1, 0.0, 0.0
 td_rel_acc = 1.0, 2.5e-3, 2.5e-3, 2.5e-3, 2.5e-3, 2.5e-3, 1e-1, 1e-1
