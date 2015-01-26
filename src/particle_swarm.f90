@@ -7,39 +7,31 @@ program particle_swarm
 
   implicit none
 
-  integer, parameter      :: dp = kind(0.0d0)
-  type(CFG_t)             :: cfg
-  character(len=80)       :: swarm_name, cfg_name, gas_name, out_file
-
-  integer                 :: mm
-  integer                 :: n_swarms_min, swarm_size
-  real(dp)                :: fld
-  real(dp)                :: init_eV, scale_factor
-  type(PC_t) :: pc
-  real(dp) :: td(SWARM_num_td)
-  real(dp) :: abs_acc(SWARM_num_td)
-  real(dp) :: rel_acc(SWARM_num_td)
+  integer, parameter :: dp = kind(0.0d0)
+  type(CFG_t)        :: cfg
+  character(len=80)  :: swarm_name
+  integer            :: mm
+  integer            :: n_swarms_min, swarm_size
+  real(dp)           :: fld
+  type(PC_t)         :: pc
+  real(dp)           :: td(SWARM_num_td)
+  real(dp)           :: abs_acc(SWARM_num_td)
+  real(dp)           :: rel_acc(SWARM_num_td)
 
   call initialize_all(cfg)
 
   ! Initialize variables
   call CFG_get(cfg, "swarm_min_number", n_swarms_min)
   call CFG_get(cfg, "swarm_size", swarm_size)
-  call CFG_get(cfg, "init_eV", init_eV)
   call CFG_get(cfg, "swarm_fld", fld)
   call CFG_get(cfg, "td_abs_acc", abs_acc)
   call CFG_get(cfg, "td_rel_acc", rel_acc)
 
-  print *, "Writing used coefficients to ",&
-       "output/" // trim(swarm_name) // "_coeffs.txt"
-  ! call IO_write_coeffs(pc, "output/" // trim(swarm_name) // "_coeffs.txt")
-
-  print *, "Starting swarm calculations"
-     call SWARM_get_data(pc, fld, swarm_size, &
-          n_swarms_min, abs_acc, rel_acc, td)
-     do mm = 1, SWARM_num_td
-        write(*, "(A25,E10.3)") "   " // SWARM_td_names(mm), td(mm)
-     end do
+  call SWARM_get_data(pc, fld, swarm_size, &
+       n_swarms_min, abs_acc, rel_acc, td)
+  do mm = 1, SWARM_num_td
+     write(*, "(A25,E10.3)") "   " // SWARM_td_names(mm), td(mm)
+  end do
 
 contains
 
@@ -50,10 +42,10 @@ contains
     use m_units_constants
     type(CFG_t), intent(inout)      :: cfg
     integer                         :: nn, tbl_size, max_num_part
-    integer                         :: n_gas_comp, n_gas_frac
+    integer                         :: swarm_size, n_gas_comp, n_gas_frac
     real(dp)                        :: pressure, temperature, max_ev
     character(len=100), allocatable :: cs_files(:)
-    character(LEN=100)              :: filename, prev_name, tmp_name
+    character(LEN=100)              :: cfg_name, prev_name, tmp_name
     character(len=20), allocatable  :: gas_names(:)
     real(dp), allocatable           :: gas_fracs(:)
     type(CS_t), allocatable         :: cross_secs(:)
@@ -87,24 +79,15 @@ contains
     call CFG_get(cfg, "gas_temperature", temperature)
     call CFG_get(cfg, "gas_pressure", pressure)
 
-    print *, "--------------------"
-    print *, "Gas information"
-    write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
-    print *, ""
-    print *, "Component - fraction"
-    do nn = 1, n_gas_comp
-       write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
-            gas_fracs(nn)
-    end do
-    print *, "--------------------"
-
     ! Initialize gas and electric field module
     call GAS_initialize(gas_names, gas_fracs, pressure, temperature)
 
     call CFG_get(cfg, "consecutive_run", consecutive_run)
 
     if (.not. consecutive_run) then
-       call CFG_write(cfg, "output/" // trim(swarm_name) // "_config.txt")
+       tmp_name = "output/" // trim(swarm_name) // "_config.txt"
+       print *, "Writing configuration to ", trim(tmp_name)
+       call CFG_write(cfg, trim(tmp_name))
 
        allocate(cs_files(n_gas_comp))
        call CFG_get(cfg, "gas_files", cs_files)
@@ -121,16 +104,43 @@ contains
 
        print *, "Initializing particle model", 1
        call CFG_get(cfg, "part_lkptbl_size", tbl_size)
-       call CFG_get(cfg, "part_max_number_of", max_num_part)
+       call CFG_get(cfg, "swarm_size", swarm_size)
+
+       ! Allocate storage for 4 times the swarm size. There are actually checks
+       ! in place to make sure it cannot grow to such a large size.
+       max_num_part = 4 * swarm_size
 
        call pc%initialize(UC_elec_mass, cross_secs, &
-            tbl_size, max_ev, max_num_part)
-       call pc%to_file(trim(swarm_name) // "_params.dat", &
-            trim(swarm_name) // "_lt.dat")
+            tbl_size, max_ev, max_num_part, get_random_seed())
 
-    else                        ! Restarted run
-       call pc%init_from_file(trim(swarm_name) // "_params.dat", &
-            trim(swarm_name) // "_lt.dat")
+       print *, "--------------------"
+       print *, "Gas information"
+       write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
+       print *, ""
+       print *, "Component - fraction"
+       do nn = 1, n_gas_comp
+          write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
+               gas_fracs(nn)
+       end do
+       print *, ""
+
+       tmp_name = "output/" // trim(swarm_name) // "_coeffs.txt"
+       print *, "Writing colrate table (as text) to ", trim(tmp_name)
+       call IO_write_coeffs(pc, trim(tmp_name))
+
+       tmp_name = "output/" // trim(swarm_name)
+       print *, "Writing particle params (raw) to ", &
+            trim(tmp_name) // "_params.dat"
+       print *, "Writing particle lookup table (raw) to ", &
+            trim(tmp_name) // "_lt.dat"
+       call pc%to_file(trim(tmp_name) // "_params.dat", &
+            trim(tmp_name) // "_lt.dat")
+       print *, "--------------------"
+
+    else ! Restarted run (can only change field!)
+       tmp_name = "output/" // trim(swarm_name)
+       call pc%init_from_file(trim(tmp_name) // "_params.dat", &
+            trim(tmp_name) // "_lt.dat", get_random_seed())
     end if
 
   end subroutine initialize_all
@@ -158,8 +168,6 @@ contains
     call CFG_add(cfg, "td_rel_acc", &
          (/1.0_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-1_dp, 1e-1_dp/), &
          "The required relative accuracies of the transport data")
-    call CFG_add(cfg, "init_eV", 1.0_dp, &
-         "The initial energy of particles")
 
     ! Gas parameters
     call CFG_add(cfg, "gas_pressure", 1.0_dp, &
@@ -179,10 +187,18 @@ contains
     ! Particle model related parameters
     call CFG_add(cfg, "part_lkptbl_size", 20*1000, &
          "The size of the lookup table for the collision rates")
-    call CFG_add(cfg, "part_max_number_of", 1000*1000, &
-         "The maximum number of particles allowed per task")
     call CFG_add(cfg, "part_max_energy_ev", 900.0_dp, &
          "The maximum energy in eV for particles in the simulation")
   end subroutine create_sim_config
+
+  function get_random_seed() result(seed)
+    integer :: seed(4)
+    integer :: time, i
+
+    call system_clock(time)
+    do i = 1, 4
+       seed(i) = ishftc(time, i*8)
+    end do
+  end function get_random_seed
 
 end program particle_swarm
