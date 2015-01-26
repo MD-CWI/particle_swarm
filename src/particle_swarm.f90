@@ -17,6 +17,7 @@ program particle_swarm
   real(dp)           :: td(SWARM_num_td)
   real(dp)           :: abs_acc(SWARM_num_td)
   real(dp)           :: rel_acc(SWARM_num_td)
+  logical            :: dry_run
 
   call initialize_all(cfg)
 
@@ -26,12 +27,18 @@ program particle_swarm
   call CFG_get(cfg, "swarm_fld", fld)
   call CFG_get(cfg, "td_abs_acc", abs_acc)
   call CFG_get(cfg, "td_rel_acc", rel_acc)
+  call CFG_get(cfg, "dry_run", dry_run)
+
+  if (dry_run) stop "End of dry run"
 
   call SWARM_get_data(pc, fld, swarm_size, &
        n_swarms_min, abs_acc, rel_acc, td)
+
+  print *, "~~~~ start output ~~~~"
   do mm = 1, SWARM_num_td
      write(*, "(A25,E10.3)") "   " // SWARM_td_names(mm), td(mm)
   end do
+  print *, "~~~~ end output ~~~~"
 
 contains
 
@@ -151,6 +158,8 @@ contains
 
     call CFG_add(cfg, "consecutive_run", .false., &
          "True means: use data from a previous run with the same name")
+    call CFG_add(cfg, "dry_run", .false., &
+         "True means: only write simulation settings, no results'")
 
     ! General simulation parameters
     call CFG_add(cfg, "swarm_fld", 1.0e7_dp, &
