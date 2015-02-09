@@ -62,25 +62,38 @@ class GasInput(QWidget):
             row[3].setText(fname)
 
 
-class SwarmSettings(QWidget):
-    """A widget for the swarm settings
-    (pressure, temperature, field range etc.)"""
+class smartLine(QObject):
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.inputs = {}
-        self.fl = QFormLayout()
-        self.addSpinBox("&Temperature (K)", 1e-6, 1e99, 300.)
-        self.addSpinBox("&Pressure (bar)", 1e-6, 1e99, 1.)
-        self.addSpinBox("&Min. field (V/m)", 1e3, 1e12, 1e6)
-        self.addSpinBox("Ma&x. field (V/m)", 1e3, 1e12, 1e7)
-        self.addSpinBox("N&um. of fields", 1, 1e6, 11)
-        self.setLayout(self.fl)
+    def __init__(self, label, defVal, validRange=None, parent=None):
+        super(QObject, self).__init__(parent)
+        self.t = type(defVal)
+        self.w = QLineEdit(str(defVal))
+        self.l = QLabel(label)
+        self.l.setBuddy(self.w)  # Set widget and label as buddies
+        self.v0 = defVal
+        if validRange:
+            if defVal < validRange[0] or defVal > validRange[1]:
+                raise ValueError('Default value not in range')
+            self.lbound = validRange[0]
+            self.ubound = validRange[1]
+        self.w.editingFinished.connect(self.validator)
 
-    def addSpinBox(self, label, minval, maxval, defval):
-        le = QLineEdit(str(defval))
-        self.fl.addRow(label, le)
-        self.inputs[label] = (le, minval, maxval, defval)
+    def validator(self):
+        isValid = False
+        try:
+            val = self.t(self.w.text())
+            if self.lbound <= val <= self.ubound:
+                isValid = True
+        except valueError:
+            pass
+
+        if not isValid:
+            box = QMessageBox()
+            msg = (self.l.text().replace("&", "") + " should lie between " +
+                   str(self.lbound) + " and " + str(self.ubound))
+            box.setText(msg)
+            box.exec_()
+            self.w.setText(str(self.v0))
 
 
 class SwarmMainWindow(QWidget):
@@ -88,14 +101,35 @@ class SwarmMainWindow(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.gasInput = GasInput(self)
-        self.gasSettings = SwarmSettings(self)
-        self.lo = QGridLayout()
 
-        self.lo.addWidget(self.gasInput, 0, 0)
-        self.lo.addWidget(self.gasSettings, 0, 1)
+        self.vdict = {}
+        self.vdict['temp'] = smartLine("&Temperature (K)",
+                                       300., (1e-6, 1e99))
+        self.vdict['pres'] = smartLine("&Pressure (bar)",
+                                       1., (1e-6, 1e99))
+        self.vdict['minfld'] = smartLine("&Min field (V/m)",
+                                         1e6, (1e0, 1e99))
+        self.vdict['maxfld'] = smartLine("Ma&x field (V/m)",
+                                         1e7, (1e0, 1e99))
+        self.vdict['nfld'] = smartLine("&Num fields",
+                                       11, (1, 1000*1000))
+
+        self.gasW = GasInput(self)
+        self.lo = QGridLayout()
+        self.lo.addWidget(self.gasW)
+
+        for i, d in enumerate(self.vdict.values()):
+            self.lo.addWidget(d.w, i+1, 1)
+            self.lo.addWidget(d.l, i+1, 0)
+
+        self.startB = QPushButton("Start computation")
+        self.startB.clicked.connect(self.startSim)
+        self.lo.addWidget(self.startB)
         self.setLayout(self.lo)
         self.setWindowTitle("Swarm GUI")
+
+    def startSim(self):
+        gasNames, gasFracs, gasFiles = self.gasW.getData()
 
 app = QApplication(sys.argv)
 smw = SwarmMainWindow()
