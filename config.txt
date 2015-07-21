@@ -1,12 +1,12 @@
 swarm_name = n2
-gas_files = input/cs_example.txt
+gas_files = cs_example.txt
 gas_mixture_name = N2
 gas_components = N2
 gas_fractions = 1.0
 swarm_size = 1000
 swarm_fld = 1e7
 part_lkptbl_size = 10000
-consecutive_run = t
+consecutive_run = f
 dry_run = f
 
 td_abs_acc = 1.0, 0.0,    0.0,    0.0, 1.0e1,  1.0e1, 0.0, 0.0

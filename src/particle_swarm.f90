@@ -101,7 +101,7 @@ contains
        call CFG_get(cfg, "part_max_energy_ev", max_ev)
 
        do nn = 1, n_gas_comp
-          call CS_add_from_file(trim(cs_files(nn)), &
+          call CS_add_from_file("input/" // trim(cs_files(nn)), &
                trim(gas_names(nn)), gas_fracs(nn) * &
                GAS_number_dens, max_ev, cross_secs)
        end do
