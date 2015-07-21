@@ -45,10 +45,12 @@ contains
     integer :: n, n_steps
     real(dp) :: dt, growth_rate
 
+    ! Sometimes a swarm can rapidly grow or shink in time. Therefore we advance
+    ! the swarm in steps, so that we can resize it if necessary.
     n_steps = ceiling(log(1.5_dp) * tau * growth_rate)
     n_steps = max(n_steps, 1)
     dt = tau/n_steps
-    
+
     do n = 1, n_steps
        call pc%advance(dt)
        call resize_swarm(pc, desired_num_part)
@@ -256,9 +258,13 @@ contains
   ! Create a swarm that is relaxed to the electric field
   subroutine create_swarm(pc, fld, tau_coll, swarm_size)
     use m_units_constants
+    !> Data type which stores particle model
     type(PC_t), intent(inout) :: pc
+    !> Electric field in which the swarm will propagate
     real(dp), intent(in)      :: fld
+    !> Estimate of time between collisions
     real(dp), intent(out)     :: tau_coll
+    !> Number of electrons in swarm
     integer, intent(in)       :: swarm_size
 
     integer, parameter        :: frame_size = 100
@@ -270,7 +276,9 @@ contains
 
     call new_swarm(pc, swarm_size, fld)
 
-    ! An electron accelerating from zero velocity gains en_eV in this time.
+    ! An electron accelerating from zero velocity gains en_eV in this time. This
+    ! time step is only used to determine when the swarm is approximately
+    ! relaxed to the background field.
     tau = sqrt(0.5_dp * en_eV * UC_elec_mass / UC_elem_charge) / abs(fld)
 
     ! Create list with unit variance and zero mean
@@ -279,7 +287,7 @@ contains
             sqrt(12.0_dp / (frame_size + frame_size**2))
     end do
 
-    ! Determine when collision rate is relaxed
+    ! Determine when the mean energy is relaxed, so that we can use this swarm
     do
        do i = 1, frame_size
           call pc%advance(tau)
@@ -295,6 +303,7 @@ contains
        if (abs(correl) < 0.25_dp) exit
     end do
 
+    ! Swarm is relaxed, place it at the origin
     call recenter_swarm(pc)
 
     ! Get current mean collision rates
@@ -307,6 +316,7 @@ contains
        coll_rates = coll_rates + tmp_vec / pc%n_part
     end do
 
+    ! Return estimate of collision time
     tau_coll = 1 / sum(coll_rates)
   end subroutine create_swarm
 
