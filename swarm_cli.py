@@ -14,8 +14,9 @@ import shutil
 import os
 import time
 import sys
+import math
 import numpy as np
-from multiprocessing import Pool, Manager
+from multiprocessing import Pool, Manager, cpu_count
 from subprocess import check_output
 
 
@@ -47,13 +48,13 @@ def get_args():
                         metavar='temperature', help='Gas temperature (K)')
     parser.add_argument('-p', type=float, default=1.0,
                         metavar='pressure', help='Gas pressure (bar)')
-    parser.add_argument('-np', type=int, default=2,
+    parser.add_argument('-np', type=int, default=cpu_count(),
                         help='Number of parallel proccesses')
 
-    parser.add_argument('-en', type=float, nargs=2, default=(1e-2, 0.0),
+    parser.add_argument('-en', type=float, nargs=2, default=(1e-3, 0.0),
                         metavar=('rel', 'abs'),
                         help='Required rel./abs. error in energy')
-    parser.add_argument('-mu', type=float, nargs=2, default=(1e-2, 0.0),
+    parser.add_argument('-mu', type=float, nargs=2, default=(5e-3, 0.0),
                         metavar=('rel', 'abs'),
                         help='Required rel./abs. error in mobility')
     parser.add_argument('-D', type=float, nargs=2, default=(1e-2, 0.0),
@@ -118,7 +119,8 @@ if __name__ == '__main__':
     if args.flin:
         args.flist = np.linspace(args.flin[0], args.flin[1], args.flin[2])
     elif args.flog:
-        args.flist = np.logspace(args.flin[0], args.flin[1], args.flin[2])
+        args.flist = np.logspace(math.log10(args.flog[0]),
+                                 math.log10(args.flog[1]), args.flog[2])
     n_flds = len(args.flist)
 
     try:
