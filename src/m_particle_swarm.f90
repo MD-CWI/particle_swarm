@@ -213,7 +213,7 @@ contains
     real(dp), intent(inout)       :: td(SWARM_num_td)
     real(dp), intent(out)         :: td_dev(SWARM_num_td)
 
-    integer, parameter            :: n_coll_times      = 40
+    integer, parameter            :: n_coll_times = 40
     integer, parameter            :: n_coll_times_diff = 20
     integer                       :: n, n_swarms
     real(dp)                      :: tau_coll, weight
@@ -232,7 +232,6 @@ contains
     ! Set accuracy requirements
     abs_acc = huge(1.0_dp)
     rel_acc = 0
-
     rel_acc(SWARM_ix_en) = acc%energy(1)
     abs_acc(SWARM_ix_en) = acc%energy(2)
     rel_acc(SWARM_ix_mu) = acc%mobility(1)
@@ -262,8 +261,6 @@ contains
           td_prev  = td
           accurate = all(td_dev < abs_acc .or. td_dev < rel_acc * td)
        end if
-
-       ! write(*, fmt="(A)", advance="no") "."
 
        ! Advance over several collisions for the diffusion measurements
        call collapse_swarm(pc)
@@ -316,7 +313,6 @@ contains
        stddev = sqrt(sum((en_hist - mean_en)**2) / (frame_size-1))
        ! Now see whether en_hist is changing more than stddev in time
        correl = sum((en_hist - mean_en) * t_hist) / (frame_size * stddev)
-       ! print *, "Relaxation:", mean_en, correl
        if (abs(correl) < 0.25_dp) exit
     end do
 

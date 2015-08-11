@@ -196,7 +196,7 @@ contains
     ! Particle model related parameters
     call CFG_add(cfg, "part_lkptbl_size", 10000, &
          "The size of the lookup table for the collision rates")
-    call CFG_add(cfg, "part_max_energy_ev", 900.0_dp, &
+    call CFG_add(cfg, "part_max_energy_ev", 500.0_dp, &
          "The maximum energy in eV for particles in the simulation")
   end subroutine create_sim_config
 
