@@ -13,32 +13,31 @@ program particle_swarm
   integer            :: mm
   integer            :: n_swarms_min, swarm_size
   real(dp)           :: fld
-  type(PC_t)         :: pc
-  real(dp)           :: td(SWARM_num_td)
-  real(dp)           :: abs_acc(SWARM_num_td)
-  real(dp)           :: rel_acc(SWARM_num_td)
+  type(PC_t)         :: pc               ! Particle data
+  type(SWARM_acc_t)  :: acc              ! Accuracy reqs.
+  real(dp)           :: td(SWARM_num_td) ! Transport data
+  real(dp)           :: td_dev(SWARM_num_td) ! Transport data error
   logical            :: dry_run
 
   call initialize_all(cfg)
-
-  ! Initialize variables
-  call CFG_get(cfg, "swarm_min_number", n_swarms_min)
-  call CFG_get(cfg, "swarm_size", swarm_size)
-  call CFG_get(cfg, "swarm_fld", fld)
-  call CFG_get(cfg, "td_abs_acc", abs_acc)
-  call CFG_get(cfg, "td_rel_acc", rel_acc)
   call CFG_get(cfg, "dry_run", dry_run)
 
-  if (dry_run) stop "End of dry run"
+  if (.not. dry_run) then
+     call CFG_get(cfg, "swarm_min_number", n_swarms_min)
+     call CFG_get(cfg, "swarm_size", swarm_size)
+     call CFG_get(cfg, "swarm_fld", fld)
+     call CFG_get(cfg, "acc_energy", acc%energy)
+     call CFG_get(cfg, "acc_mobility", acc%mobility)
+     call CFG_get(cfg, "acc_diffusion", acc%diffusion)
 
-  call SWARM_get_data(pc, fld, swarm_size, &
-       n_swarms_min, abs_acc, rel_acc, td)
+     call SWARM_get_data(pc, fld, swarm_size, &
+          n_swarms_min, acc, td, td_dev)
 
-  print *, "~~~~ start output ~~~~"
-  do mm = 1, SWARM_num_td
-     write(*, "(A25,E10.3)") "   " // SWARM_td_names(mm), td(mm)
-  end do
-  print *, "~~~~ end output ~~~~"
+     do mm = 1, SWARM_num_td
+        write(*, "(A25,E10.3,E9.2)") "   " // &
+             SWARM_td_names(mm), td(mm), td_dev(mm)
+     end do
+  end if
 
 contains
 
@@ -90,10 +89,9 @@ contains
     call GAS_initialize(gas_names, gas_fracs, pressure, temperature)
 
     call CFG_get(cfg, "consecutive_run", consecutive_run)
+    call CFG_get(cfg, "output_dir", output_dir)
 
     if (.not. consecutive_run) then
-       call CFG_get(cfg, "output_dir", output_dir)
-       print *, "output", output_dir
        tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_config.txt"
        print *, "Writing configuration to ", trim(tmp_name)
        call CFG_write(cfg, trim(tmp_name))
@@ -174,17 +172,17 @@ contains
     call CFG_add(cfg, "output_dir", "output", &
          "The output directory (include no trailing slash!)")
 
-    call CFG_add(cfg, "td_abs_acc", &
-         (/1.0_dp, 0.0_dp, 0.0_dp, 1.0e-2_dp, 1.0e1_dp, 1.0e1_dp, 0.0_dp, 0.0_dp/), &
-         "The required absolute accuracies of the transport data")
-    call CFG_add(cfg, "td_rel_acc", &
-         (/1.0_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-2_dp, 1e-1_dp, 1e-1_dp/), &
-         "The required relative accuracies of the transport data")
+    call CFG_add(cfg, "acc_energy", [1.0e-2_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the energy")
+    call CFG_add(cfg, "acc_mobility", [1.0e-2_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the mobility")
+    call CFG_add(cfg, "acc_diffusion", [1.0e-2_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the diffusion coeff.")
 
     ! Gas parameters
     call CFG_add(cfg, "gas_pressure", 1.0_dp, &
          "The gas pressure (bar)")
-    call CFG_add(cfg, "gas_temperature", 293.0_dp, &
+    call CFG_add(cfg, "gas_temperature", 300.0_dp, &
          "The gas temperature (Kelvin)")
     call CFG_add(cfg, "gas_mixture_name", "N2", &
          "The name of the gas mixture used")

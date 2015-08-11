@@ -14,22 +14,28 @@ module m_particle_swarm
      real(dp)           :: a_rate
      real(dp)           :: v(3)
      real(dp)           :: v2
-     real(dp)           :: v2_v(3)
      real(dp)           :: cov_xv(3)
-     real(dp)           :: cov_v2_xv(3)
   end type part_stats_t
 
-  integer, parameter :: SWARM_num_td = 8
-  character(len=20) :: SWARM_td_names(SWARM_num_td) = (/ &
-       "field[V/m]    ", &
-       "en[eV]        ", &
-       "mu[m2/(Vs)]   ", &
-       "Dc[m2/s]      ", &
-       "alpha[1/m]    ", &
-       "eta[1/m]      ", &
-       "mu_en[m2/(Vs)]", &
-       "Dc_en[m2/s]   " /)
+  integer, parameter :: SWARM_num_td = 6
+  integer, parameter :: SWARM_ix_fld = 1
+  integer, parameter :: SWARM_ix_en = 2
+  integer, parameter :: SWARM_ix_mu = 3
+  integer, parameter :: SWARM_ix_D = 4
+  integer, parameter :: SWARM_ix_alpha = 5
+  integer, parameter :: SWARM_ix_eta = 6
 
+  type SWARM_acc_t
+     real(dp) :: energy(2)
+     real(dp) :: mobility(2)
+     real(dp) :: diffusion(2)
+  end type SWARM_acc_t
+
+  character(len=20) :: SWARM_td_names(SWARM_num_td) = &
+       [character(len=20) :: "field[V/m]", "en[eV]", &
+       "mu[m2/(Vs)]", "Dc[m2/s]", "alpha[1/m]", "eta[1/m]"]
+
+  public :: SWARM_acc_t
   public :: SWARM_num_td
   public :: SWARM_td_names
 
@@ -40,10 +46,10 @@ contains
 
   subroutine swarm_advance(pc, tau, desired_num_part, growth_rate)
     type(PC_t), intent(inout) :: pc
-    real(dp), intent(in) :: tau
-    integer, intent(in) :: desired_num_part
-    integer :: n, n_steps
-    real(dp) :: dt, growth_rate
+    real(dp), intent(in)      :: tau
+    integer, intent(in)       :: desired_num_part
+    integer                   :: n, n_steps
+    real(dp)                  :: dt, growth_rate
 
     ! Sometimes a swarm can rapidly grow or shink in time. Therefore we advance
     ! the swarm in steps, so that we can resize it if necessary.
@@ -59,7 +65,7 @@ contains
 
   subroutine recenter_swarm(pc)
     type(PC_t), intent(inout) :: pc
-    real(dp) :: sum_x(3), avg_x(3)
+    real(dp)                  :: sum_x(3), avg_x(3)
     call pc%compute_vector_sum(get_position, sum_x)
     avg_x = sum_x / pc%get_num_sim_part()
     call pc%translate(-avg_x)
@@ -129,9 +135,7 @@ contains
        ps%n_samples = 0
        ps%v         = 0.0_dp
        ps%v2        = 0.0_dp
-       ps%v2_v      = 0.0_dp
        ps%cov_xv    = 0.0_dp
-       ps%cov_v2_xv = 0.0_dp
        ps%i_rate    = 0.0_dp
        ps%a_rate    = 0.0_dp
     end if
@@ -145,12 +149,12 @@ contains
        v             = part%v
        v2            = sum(v**2)
        ps%v          = ps%v + (v - ps%v) * inv_n_samples
-       ps%v2_v       = ps%v2_v + (v2 * v - ps%v2_v) * inv_n_samples
+       ! ps%v2_v       = ps%v2_v + (v2 * v - ps%v2_v) * inv_n_samples
 
        ! This placing is intentional:
        ! http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
        ps%cov_xv     = ps%cov_xv + (v - ps%v) * part%x
-       ps%cov_v2_xv  = ps%cov_v2_xv + v2 * (v - ps%v) * part%x
+       ! ps%cov_v2_xv  = ps%cov_v2_xv + v2 * (v - ps%v) * part%x
        ps%v2         = ps%v2 + (v2 - ps%v2) * inv_n_samples
        call pc%get_coll_rates(sqrt(v2), coll_rates(1:pc%n_colls))
        ps%i_rate = ps%i_rate + (sum(coll_rates(pc%ionization_colls)) - &
@@ -175,8 +179,8 @@ contains
     td(4)     = ps%cov_xv(1) / (ps%n_samples)             ! Long. diffusion
     td(5)     = ps%i_rate / drift_vel                     ! Ionization
     td(6)     = ps%a_rate / drift_vel                     ! Attachment
-    td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
-    td(8)     = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
+    ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
+    ! td(8)     = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
   end subroutine get_td_from_ps
 
   subroutine new_swarm(pc, swarm_size, fld)
@@ -201,27 +205,40 @@ contains
   end subroutine new_swarm
 
   subroutine SWARM_get_data(pc, fld, swarm_size, n_swarms_min, &
-       abs_acc, rel_acc, td)
-    type(PC_t), intent(inout) :: pc
-    real(dp), intent(in)      :: fld
-    integer, intent(in)       :: swarm_size, n_swarms_min
-    real(dp), intent(in)      :: abs_acc(SWARM_num_td), rel_acc(SWARM_num_td)
-    real(dp), intent(inout)   :: td(SWARM_num_td)
+       acc, td, td_dev)
+    type(PC_t), intent(inout)     :: pc
+    real(dp), intent(in)          :: fld
+    integer, intent(in)           :: swarm_size, n_swarms_min
+    type(SWARM_acc_t), intent(in) :: acc
+    real(dp), intent(inout)       :: td(SWARM_num_td)
+    real(dp), intent(out)         :: td_dev(SWARM_num_td)
 
-    integer, parameter        :: n_coll_times      = 40
-    integer, parameter        :: n_coll_times_diff = 20
-    integer                   :: n, n_swarms
-    real(dp)                  :: tau_coll, weight
-    real(dp)                  :: td_dev(SWARM_num_td), td_prev(SWARM_num_td)
-    real(dp)                  :: growth_rate
-    logical                   :: accurate
-    type(part_stats_t)        :: ps
+    integer, parameter            :: n_coll_times      = 40
+    integer, parameter            :: n_coll_times_diff = 20
+    integer                       :: n, n_swarms
+    real(dp)                      :: tau_coll, weight
+    real(dp)                      :: td_prev(SWARM_num_td)
+    real(dp)                      :: abs_acc(SWARM_num_td)
+    real(dp)                      :: rel_acc(SWARM_num_td)
+    real(dp)                      :: growth_rate
+    logical                       :: accurate
+    type(part_stats_t)            :: ps
 
     n_swarms = 0
     td_dev   = 0.0_dp
     td_prev  = 0.0_dp
     accurate = .false.
-    ! print *, "Simulating for fld:", fld, "V/m"
+
+    ! Set accuracy requirements
+    abs_acc = huge(1.0_dp)
+    rel_acc = 0
+
+    rel_acc(SWARM_ix_en) = acc%energy(1)
+    abs_acc(SWARM_ix_en) = acc%energy(2)
+    rel_acc(SWARM_ix_mu) = acc%mobility(1)
+    abs_acc(SWARM_ix_mu) = acc%mobility(2)
+    rel_acc(SWARM_ix_D)  = acc%diffusion(1)
+    abs_acc(SWARM_ix_D)  = acc%diffusion(2)
 
     call create_swarm(pc, fld, tau_coll, swarm_size)
     call update_particle_stats(pc, ps, .true.)
