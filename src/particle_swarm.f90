@@ -51,8 +51,8 @@ contains
     integer                         :: nn, tbl_size, max_num_part
     integer                         :: swarm_size, n_gas_comp, n_gas_frac
     real(dp)                        :: pressure, temperature, max_ev
-    character(len=100), allocatable :: cs_files(:)
-    character(LEN=100)              :: cfg_name, prev_name, tmp_name
+    character(len=200)              :: cs_file, output_dir
+    character(LEN=200)              :: cfg_name, prev_name, tmp_name
     character(len=20), allocatable  :: gas_names(:)
     real(dp), allocatable           :: gas_fracs(:)
     type(CS_t), allocatable         :: cross_secs(:)
@@ -92,22 +92,23 @@ contains
     call CFG_get(cfg, "consecutive_run", consecutive_run)
 
     if (.not. consecutive_run) then
-       tmp_name = "output/" // trim(swarm_name) // "_config.txt"
+       call CFG_get(cfg, "output_dir", output_dir)
+       print *, "output", output_dir
+       tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_config.txt"
        print *, "Writing configuration to ", trim(tmp_name)
        call CFG_write(cfg, trim(tmp_name))
 
-       allocate(cs_files(n_gas_comp))
-       call CFG_get(cfg, "gas_files", cs_files)
+       call CFG_get(cfg, "gas_file", cs_file)
        call CFG_get(cfg, "part_max_energy_ev", max_ev)
 
        do nn = 1, n_gas_comp
-          call CS_add_from_file(trim(cs_files(nn)), &
+          call CS_add_from_file(trim(cs_file), &
                trim(gas_names(nn)), gas_fracs(nn) * &
                GAS_number_dens, max_ev, cross_secs)
        end do
 
        call CS_write_summary(cross_secs, &
-            "output/" // trim(swarm_name) // "_cs_summary.txt")
+            trim(output_dir) // "/" // trim(swarm_name) // "_cs_summary.txt")
 
        print *, "Initializing particle model", 1
        call CFG_get(cfg, "part_lkptbl_size", tbl_size)
@@ -131,11 +132,11 @@ contains
        end do
        print *, ""
 
-       tmp_name = "output/" // trim(swarm_name) // "_coeffs.txt"
+       tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_coeffs.txt"
        print *, "Writing colrate table (as text) to ", trim(tmp_name)
        call IO_write_coeffs(pc, trim(tmp_name))
 
-       tmp_name = "output/" // trim(swarm_name)
+       tmp_name = trim(output_dir) // "/" // trim(swarm_name)
        print *, "Writing particle params (raw) to ", &
             trim(tmp_name) // "_params.dat"
        print *, "Writing particle lookup table (raw) to ", &
@@ -145,7 +146,7 @@ contains
        print *, "--------------------"
 
     else ! Restarted run (can only change field!)
-       tmp_name = "output/" // trim(swarm_name)
+       tmp_name = trim(output_dir) // "/" // trim(swarm_name)
        call pc%init_from_file(trim(tmp_name) // "_params.dat", &
             trim(tmp_name) // "_lt.dat", get_random_seed())
     end if
@@ -170,6 +171,8 @@ contains
          "The minimum number of swarms")
     call CFG_add(cfg, "swarm_size", 1000, &
          "The initial size of a swarm")
+    call CFG_add(cfg, "output_dir", "output", &
+         "The output directory (include no trailing slash!)")
 
     call CFG_add(cfg, "td_abs_acc", &
          (/1.0_dp, 0.0_dp, 0.0_dp, 1.0e-2_dp, 1.0e1_dp, 1.0e1_dp, 0.0_dp, 0.0_dp/), &
@@ -187,14 +190,13 @@ contains
          "The name of the gas mixture used")
     call CFG_add(cfg, "gas_components", (/"N2"/), &
          "The names of the gases used in the simulation", .true.)
-    call CFG_add(cfg, "gas_files", &
-         (/"cross_sections_nitrogen.txt"/), &
-         & "The files in which to find cross section data for each gas", .true.)
+    call CFG_add(cfg, "gas_file", "input/cross_sections_nitrogen.txt", &
+         "The file in which to find cross section data")
     call CFG_add(cfg, "gas_fractions", (/1.0_dp /), &
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
 
     ! Particle model related parameters
-    call CFG_add(cfg, "part_lkptbl_size", 20*1000, &
+    call CFG_add(cfg, "part_lkptbl_size", 10000, &
          "The size of the lookup table for the collision rates")
     call CFG_add(cfg, "part_max_energy_ev", 900.0_dp, &
          "The maximum energy in eV for particles in the simulation")

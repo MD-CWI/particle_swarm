@@ -1,5 +1,5 @@
 swarm_name = n2
-gas_files = input/cs_example.txt
+gas_file = input/cs_example.txt
 gas_mixture_name = N2
 gas_components = N2
 gas_fractions = 1.0
