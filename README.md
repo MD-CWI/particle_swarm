@@ -6,6 +6,8 @@ particle model. The Monte Carlo particle model is written in Fortran 90, and
 uses some Fortran 2003 features. There is a Python 2/3 command line interface
 which can be used to perform parallel swarm computations, see the example below.
 
+How the transport data is computed is described in e.g. http://dx.doi.org/10.1088/0022-3727/38/16/032
+
 Author: Jannis Teunissen, jannis@teunissen.net
 
 ### Requirements
@@ -60,6 +62,7 @@ for one electric field.
 
 ### Related software / projects
 
-Bolos: https://github.com/aluque/bolos
-Bolsig+: http://www.bolsig.laplace.univ-tlse.fr
-LXCat: http://lxcat.net
+* Bolos: https://github.com/aluque/bolos
+* Bolsig+: http://www.bolsig.laplace.univ-tlse.fr
+* LXCat: http://lxcat.net
+* Magboltz: http://consult.cern.ch/writeup/magboltz/
