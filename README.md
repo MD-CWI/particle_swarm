@@ -6,10 +6,14 @@ particle model. The Monte Carlo particle model is written in Fortran 90, and
 uses some Fortran 2003 features. There is a Python 2/3 command line interface
 which can be used to perform parallel swarm computations, see the example below.
 
+Author: Jannis Teunissen, jannis@teunissen.net
+
 ### Requirements
 
 1. Particle model -- gfortran 4.8 or newer
 2. Command line interface -- Python 2.7 or newer
+
+The code has been tested on GNU/Linux and Mac.
 
 ### Getting the code
 
@@ -54,5 +58,8 @@ The first line of the output is a header with the names of the columns. Below
 the header there is a matrix of values, separated by spaces. Each row gives data
 for one electric field.
 
-### Author
-Jannis Teunissen, jannis@teunissen.net
+### Related software / projects
+
+Bolos: https://github.com/aluque/bolos
+Bolsig+: http://www.bolsig.laplace.univ-tlse.fr
+LXCat: http://lxcat.net
