@@ -22,7 +22,12 @@ from subprocess import check_output
 
 def get_args():
     # Get and parse the command line arguments
-    parser = argparse.ArgumentParser(prog='Swarm simulator')
+    parser = argparse.ArgumentParser(
+        description='''Command line interface to compute electron
+        transport data from swarm simulations.
+        Author: Jannis Teunissen, jannis@teunissen.net''',
+        epilog='''Example:
+        ./swarm_cli.py crosssec.txt results.txt -gc N2 1.0 -flist 1e7 2e7''')
     parser.add_argument('in_file', type=str,
                         help='Input file with cross sections')
     parser.add_argument('out_file', type=str,
