@@ -14,10 +14,10 @@ which can be used to perform parallel swarm computations, see the example below.
 ### Getting the code
 
     git clone https://github.com/jannisteunissen/particle_swarm
-    cd particle_swarm
 
 ### Compiling the code
 
+    cd particle_swarm
     make
 
 ### Using the command line interface
@@ -31,6 +31,28 @@ which can be used to perform parallel swarm computations, see the example below.
 The last command uses cross sections from the file crosssec.txt, stores results
 in results.txt and performs swarm simulations in nitrogen (N2) for 10 electric
 fields between 1e7 V/m and 2e7 V/m.
+
+### Without the command line interface
+
+    # Compute transport data in a single electric field,
+    # with the settings from config.txt
+    ./particle_swarm config.txt
+
+A file config_example.txt is included, which shows the basic options. In the
+output directory (specified by output_dir in the configuration file), a file
+[...]_config.txt will appear, which shows all available options with some
+documentation.
+
+### Getting input data (cross sections)
+
+Input data can be obtained from http://lxcat.net, the downloaded text files with
+cross sections can directly be used.
+
+### Format of output data
+
+The first line of the output is a header with the names of the columns. Below
+the header there is a matrix of values, separated by spaces. Each row gives data
+for one electric field.
 
 ### Author
 Jannis Teunissen, jannis@teunissen.net
