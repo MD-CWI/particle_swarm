@@ -61,15 +61,20 @@ contains
     call create_sim_config(cfg)
     call CFG_sort(cfg)
 
-    swarm_name = "swarm"
+    swarm_name = ""
     prev_name = ""
     do nn = 1, command_argument_count()
        call get_command_argument(nn, cfg_name)
        call CFG_read_file(cfg, trim(cfg_name))
 
        call CFG_get(cfg, "swarm_name", tmp_name)
-       if (tmp_name /= "" .and. tmp_name /= prev_name) &
-            swarm_name = trim(swarm_name) // "_" // trim(tmp_name)
+       if (tmp_name /= "" .and. tmp_name /= prev_name) then
+          if (swarm_name /= "") then
+             swarm_name = trim(swarm_name) // "_" // trim(tmp_name)
+          else
+             swarm_name = trim(tmp_name)
+          end if
+       end if
        prev_name = tmp_name
     end do
 
