@@ -1,5 +1,5 @@
-FC 	:= gfortran
-FFLAGS	:= -Wall -O2 -std=f2008 -fopenmp
+FC 		:= gfortran
+FFLAGS	:= -Wall -O2 -std=f2008
 
 ifeq ($(DEBUG), 1)
 	FFLAGS += -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \

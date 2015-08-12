@@ -1,7 +1,6 @@
-FC 	:= mpif90
-FFLAGS	:= -Wall -O2 -fopenmp
-OBJS	:= m_gas.o m_particle_core.o m_particle_par.o m_cross_sec.o kdtree2.o
-
+FC 		:= gfortran
+FFLAGS	:= -Wall -O2
+OBJS	:= m_gas.o m_particle_core.o m_cross_sec.o kdtree2.o
 INCDIRS	:= ../fosito
 
 ifeq ($(DEBUG), 1)

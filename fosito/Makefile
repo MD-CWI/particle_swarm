@@ -1,4 +1,4 @@
-FC 	:= gfortran
+FC 		:= gfortran
 FFLAGS	:= -Wall -O2
 OBJS	:= m_units_constants.o m_config.o m_lookup_table.o\
 	m_random.o m_mrgrnk.o m_linked_list.o m_find_index.o
