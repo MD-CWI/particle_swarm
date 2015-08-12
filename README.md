@@ -13,7 +13,7 @@ Author: Jannis Teunissen, jannis@teunissen.net
 ### Requirements
 
 1. Particle model -- gfortran 4.8 or newer
-2. Command line interface -- Python 2.7 or newer
+2. Command line interface -- Python 2.7 or newer with numpy
 
 The code has been tested on GNU/Linux and Mac.
 
