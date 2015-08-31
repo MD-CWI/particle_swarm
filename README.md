@@ -32,11 +32,11 @@ The code has been tested on GNU/Linux and Mac.
     ./swarm_cli.py --help
 
     # Example of invocation
-    ./swarm_cli.py crosssec.txt results.txt -gc N2 1.0 -flin 1e7 2e7 10
+    ./swarm_cli.py input/cs_example.txt results.txt -gc N2 1.0 -flin 1e7 2e7 10
 
-The last command uses cross sections from the file crosssec.txt, stores results
-in results.txt and performs swarm simulations in nitrogen (N2) for 10 electric
-fields between 1e7 V/m and 2e7 V/m.
+The last command uses cross sections from the file input/cs_example.txt, stores
+results in results.txt and performs swarm simulations in nitrogen (N2) for 10
+electric fields between 1e7 V/m and 2e7 V/m.
 
 ### Without the command line interface
 
