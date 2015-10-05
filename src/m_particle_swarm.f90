@@ -53,7 +53,7 @@ contains
 
     ! Sometimes a swarm can rapidly grow or shink in time. Therefore we advance
     ! the swarm in steps, so that we can resize it if necessary.
-    n_steps = ceiling(log(1.5_dp) * tau * growth_rate)
+    n_steps = ceiling(tau * growth_rate / log(2.0_dp))
     n_steps = max(n_steps, 1)
     dt = tau/n_steps
 

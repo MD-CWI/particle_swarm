@@ -361,6 +361,8 @@ contains
           else if (n_part_out == 1) then
              self%particles(ll) = part_out(1)
           else
+             if (self%n_part+n_part_out-1 > size(self%particles)) &
+                  stop "move_and_collide: Not enough space for particles"
              self%particles(ll) = part_out(1)
              self%particles(self%n_part+1:self%n_part+n_part_out-1) = &
                   part_out(2:n_part_out)
