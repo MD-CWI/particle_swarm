@@ -117,9 +117,9 @@ contains
        call CFG_get(cfg, "part_lkptbl_size", tbl_size)
        call CFG_get(cfg, "swarm_size", swarm_size)
 
-       ! Allocate storage for 4 times the swarm size. There are actually checks
-       ! in place to make sure it cannot grow to such a large size.
-       max_num_part = 4 * swarm_size
+       ! Allocate storage for 8 times the swarm size. There are checks in place
+       ! to make sure it cannot grow to such a large size.
+       max_num_part = 8 * swarm_size
 
        call pc%initialize(UC_elec_mass, cross_secs, &
             tbl_size, max_ev, max_num_part, get_random_seed())
