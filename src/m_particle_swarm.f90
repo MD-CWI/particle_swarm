@@ -190,7 +190,7 @@ contains
     integer, intent(in)       :: swarm_size
     real(dp), intent(in)      :: fld
     integer                   :: ll
-    real(dp)                  :: x(3), v(3), a(3)
+    real(dp)                  :: x(3), v(3), a(3), vel
     real(dp), parameter       :: eV = 1 ! Create 1 eV particles
 
     call pc%remove_particles()
@@ -198,8 +198,8 @@ contains
     do ll = 1, swarm_size
        x = 0
        a = (/0.0_dp, 0.0_dp, fld/) * UC_elec_charge / UC_elec_mass
-       v = (/0.0_dp, 0.0_dp, &
-            sign(sqrt(2 * eV * UC_elem_charge/UC_elec_mass), -a(3))/)
+       vel = sqrt(2 * eV * UC_elem_charge/UC_elec_mass)
+       v = pc%rng%sphere(vel)
        call pc%create_part(x, v, a, 1.0_dp, 0.0_dp)
     end do
   end subroutine new_swarm
