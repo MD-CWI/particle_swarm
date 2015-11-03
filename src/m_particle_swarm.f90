@@ -213,8 +213,8 @@ contains
     real(dp), intent(inout)       :: td(SWARM_num_td)
     real(dp), intent(out)         :: td_dev(SWARM_num_td)
 
-    integer, parameter            :: n_coll_times = 40
-    integer, parameter            :: n_coll_times_diff = 20
+    integer, parameter            :: n_coll_times = 80
+    integer, parameter            :: n_coll_times_diff = 40
     integer                       :: n, n_swarms
     real(dp)                      :: tau_coll, weight
     real(dp)                      :: td_prev(SWARM_num_td)
@@ -283,10 +283,12 @@ contains
 
     integer, parameter        :: frame_size = 100
     real(dp), parameter       :: en_eV      = 0.1_dp
-    integer                   :: i, ll
+    integer                   :: i, ll, cntr
     real(dp)                  :: en_hist(frame_size), t_hist(frame_size)
     real(dp)                  :: mean_en, correl, stddev, tau
     real(dp), allocatable     :: coll_rates(:), tmp_vec(:)
+    integer, parameter        :: max_its_relax = 500
+    integer, parameter        :: min_its_relax = 5
 
     call new_swarm(pc, swarm_size, fld)
 
