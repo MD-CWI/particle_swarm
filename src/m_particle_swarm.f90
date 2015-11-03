@@ -297,14 +297,14 @@ contains
     ! relaxed to the background field.
     tau = sqrt(0.5_dp * en_eV * UC_elec_mass / UC_elem_charge) / abs(fld)
 
-    ! Create list with unit variance and zero mean
+    ! Create linear table with unit variance and zero mean
     do i = 1, frame_size
        t_hist(i) = (i - 0.5_dp * (frame_size+1)) * &
             sqrt(12.0_dp / (frame_size + frame_size**2))
     end do
 
     ! Determine when the mean energy is relaxed, so that we can use this swarm
-    do
+    do cntr = 1, max_its_relax
        do i = 1, frame_size
           call pc%advance(tau)
           call resize_swarm(pc, swarm_size)
@@ -313,9 +313,11 @@ contains
 
        mean_en = sum(en_hist) / frame_size
        stddev = sqrt(sum((en_hist - mean_en)**2) / (frame_size-1))
-       ! Now see whether en_hist is changing more than stddev in time
+
+       ! Compute correlation between en_hist and a line
        correl = sum((en_hist - mean_en) * t_hist) / (frame_size * stddev)
-       if (abs(correl) < 0.25_dp) exit
+       ! If the correlation is sufficiently small, exit
+       if (cntr > min_its_relax .and. abs(correl) < 0.25_dp) exit
     end do
 
     ! Swarm is relaxed, place it at the origin
