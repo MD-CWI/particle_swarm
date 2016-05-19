@@ -176,7 +176,7 @@ contains
     td(1)     = fld
     td(2)     = 0.5 * UC_elec_mass * ps%v2 / UC_elec_volt ! Energy
     td(3)     = abs(drift_vel / fld)                      ! Mobility
-    td(4)     = ps%cov_xv(1) / (ps%n_samples)             ! Long. diffusion
+    td(4)     = ps%cov_xv(3) / (ps%n_samples)             ! Long. diffusion
     td(5)     = ps%i_rate / drift_vel                     ! Ionization
     td(6)     = ps%a_rate / drift_vel                     ! Attachment
     ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
