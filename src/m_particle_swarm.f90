@@ -215,8 +215,13 @@ contains
     real(dp), intent(inout)       :: td(SWARM_num_td)
     real(dp), intent(out)         :: td_dev(SWARM_num_td)
 
-    integer, parameter            :: n_coll_times = 80
-    integer, parameter            :: n_coll_times_diff = 40
+    ! How many measurements to take per swarm
+    integer, parameter            :: n_coll_times = 500
+
+    ! Time to let a swarm relax after re-centering it, important for measuring
+    ! diffusion coefficients
+    integer, parameter            :: n_coll_times_diff = 500
+
     integer                       :: n, n_swarms
     real(dp)                      :: tau_coll, weight
     real(dp)                      :: td_prev(SWARM_num_td)
@@ -246,6 +251,7 @@ contains
 
     ! Loop over the swarms until converged
     do while (.not. accurate .or. n_swarms < n_swarms_min)
+
        growth_rate = abs(ps%i_rate - ps%a_rate)
        do n = 1, n_coll_times
           call swarm_advance(pc, tau_coll, swarm_size, growth_rate)
