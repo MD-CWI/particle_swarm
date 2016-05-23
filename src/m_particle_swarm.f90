@@ -125,7 +125,7 @@ contains
 
     integer                           :: ix, num_part
     real(dp)                          :: inv_n_samples
-    real(dp)                          :: v(3), v2
+    real(dp)                          :: v(3), v2, corr_fac
     real(dp)                          :: coll_rates(PC_max_num_coll)
     type(PC_part_t)                   :: part
 
@@ -141,6 +141,7 @@ contains
     end if
 
     num_part = pc%get_num_sim_part()
+    corr_fac = num_part/(num_part-1.0_dp)
 
     do ix = 1, num_part
        part = pc%get_part(ix)
@@ -153,7 +154,8 @@ contains
 
        ! This placing is intentional:
        ! http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-       ps%cov_xv     = ps%cov_xv + (v - ps%v) * part%x
+       ps%cov_xv     = ps%cov_xv + (v - ps%v) * part%x * corr_fac
+
        ! ps%cov_v2_xv  = ps%cov_v2_xv + v2 * (v - ps%v) * part%x
        ps%v2         = ps%v2 + (v2 - ps%v2) * inv_n_samples
        call pc%get_coll_rates(sqrt(v2), coll_rates(1:pc%n_colls))
