@@ -8,7 +8,10 @@ which can be used to perform parallel swarm computations, see the example below.
 
 How the transport data is computed is described in e.g. http://dx.doi.org/10.1088/0022-3727/38/16/032
 
-Author: Jannis Teunissen, jannis@teunissen.net
+People involved:
+
+* Original author: Jannis Teunissen, jannis@teunissen.net
+* Testing, fixing bugs: Anbang Sun
 
 ### Requirements
 
