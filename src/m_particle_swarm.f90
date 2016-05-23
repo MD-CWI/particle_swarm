@@ -208,6 +208,8 @@ contains
 
   subroutine SWARM_get_data(pc, fld, swarm_size, n_swarms_min, &
        acc, td, td_dev)
+    use m_units_constants
+
     type(PC_t), intent(inout)     :: pc
     real(dp), intent(in)          :: fld
     integer, intent(in)           :: swarm_size, n_swarms_min
@@ -215,21 +217,16 @@ contains
     real(dp), intent(inout)       :: td(SWARM_num_td)
     real(dp), intent(out)         :: td_dev(SWARM_num_td)
 
-    ! How many measurements to take per swarm
-    integer, parameter            :: n_coll_times = 500
-
-    ! Time to let a swarm relax after re-centering it, important for measuring
-    ! diffusion coefficients
-    integer, parameter            :: n_coll_times_diff = 500
-
-    integer                       :: n, n_swarms
-    real(dp)                      :: tau_coll, weight
-    real(dp)                      :: td_prev(SWARM_num_td)
-    real(dp)                      :: abs_acc(SWARM_num_td)
-    real(dp)                      :: rel_acc(SWARM_num_td)
-    real(dp)                      :: growth_rate
-    logical                       :: accurate
-    type(part_stats_t)            :: ps
+    real(dp), parameter :: fac = 0.5 * UC_elec_mass/UC_elem_charge
+    integer             :: n_coll_times
+    integer             :: n, n_swarms
+    real(dp)            :: tau_coll, weight
+    real(dp)            :: td_prev(SWARM_num_td)
+    real(dp)            :: abs_acc(SWARM_num_td)
+    real(dp)            :: rel_acc(SWARM_num_td)
+    real(dp)            :: growth_rate
+    logical             :: accurate
+    type(part_stats_t)  :: ps
 
     n_swarms = 0
     td_dev   = 0.0_dp
@@ -247,10 +244,16 @@ contains
     abs_acc(SWARM_ix_D)  = acc%diffusion(2)
 
     call create_swarm(pc, fld, tau_coll, swarm_size)
+
+    ps%fld = fld
     call update_particle_stats(pc, ps, .true.)
 
     ! Loop over the swarms until converged
     do while (.not. accurate .or. n_swarms < n_swarms_min)
+
+       n_coll_times = nint(fac * ps%v2 / abs(ps%fld * ps%v(3)) / tau_coll)
+       n_coll_times = max(10, n_coll_times)
+       n_coll_times = min(2000, n_coll_times)
 
        growth_rate = abs(ps%i_rate - ps%a_rate)
        do n = 1, n_coll_times
@@ -272,7 +275,7 @@ contains
 
        ! Advance over several collisions for the diffusion measurements
        call collapse_swarm(pc)
-       call swarm_advance(pc, n_coll_times_diff * tau_coll, &
+       call swarm_advance(pc, n_coll_times * tau_coll, &
             swarm_size, growth_rate)
     end do
   end subroutine SWARM_get_data
@@ -289,14 +292,15 @@ contains
     !> Number of electrons in swarm
     integer, intent(in)       :: swarm_size
 
-    integer, parameter        :: frame_size = 100
-    real(dp), parameter       :: en_eV      = 0.1_dp
-    integer                   :: i, ll, cntr
-    real(dp)                  :: en_hist(frame_size), t_hist(frame_size)
-    real(dp)                  :: mean_en, correl, stddev, tau
-    real(dp), allocatable     :: coll_rates(:), tmp_vec(:)
-    integer, parameter        :: max_its_relax = 500
-    integer, parameter        :: min_its_relax = 5
+    integer, parameter    :: frame_size    = 100
+    real(dp), parameter   :: en_eV         = 0.1_dp
+    integer, parameter    :: max_its_relax = 500
+    integer, parameter    :: min_its_relax = 5
+    integer               :: i, ll, cntr
+    real(dp)              :: en_hist(frame_size), t_hist(frame_size)
+    real(dp)              :: mean_en, correl, stddev, tau
+    real(dp), allocatable :: coll_rates(:), tmp_vec(:)
+
 
     call new_swarm(pc, swarm_size, fld)
 
@@ -343,6 +347,7 @@ contains
 
     ! Return estimate of collision time
     tau_coll = 1 / sum(coll_rates)
+
   end subroutine create_swarm
 
 end module m_particle_swarm
