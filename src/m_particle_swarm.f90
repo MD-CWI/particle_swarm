@@ -253,7 +253,7 @@ contains
 
        ! Estimate the time scale for energy relaxation, given by:
        ! energy / (d/dt energy), in units of the collision time.
-       n_coll_times = nint(fac * ps%v2 / abs(ps%fld * ps%v(3) * tau_coll)
+       n_coll_times = nint(fac * ps%v2 / abs(ps%fld * ps%v(3)) * tau_coll)
 
        ! For safety, limit n_coll_times to 10 -- 2000
        n_coll_times = max(10, n_coll_times)
