@@ -27,11 +27,11 @@ def get_args():
         transport data from swarm simulations.
         Author: Jannis Teunissen, jannis@teunissen.net''',
         epilog='''Example:
-        ./swarm_cli.py crosssec.txt results.txt -gc N2 1.0 -flist 1e7 2e7''')
-    parser.add_argument('in_file', type=str,
-                        help='Input file with cross sections')
-    parser.add_argument('out_file', type=str,
-                        help='Output file with transport data')
+        ./swarm_cli.py -cs crosssec.txt -of results.txt -gc N2 1.0 -flist 1e7 2e7''')
+    parser.add_argument('cs', type=str,
+                        help='File with cross sections')
+    parser.add_argument('-out_file', type=str, default='results.txt',
+                        help='Output file, default is results.txt')
     parser.add_argument('-gc', dest='gas_comps', type=str, nargs='+',
                         required=True, metavar='gas frac',
                         help='List of gas names and fractions, '
@@ -47,8 +47,6 @@ def get_args():
                        metavar=('min', 'max', 'N'),
                        help='Logarithmic range of N electric fields (V/m)')
 
-    parser.add_argument('-gn', dest='gas_name', type=str, default='GAS',
-                        help='Gas mixture name')
     parser.add_argument('-T', type=float, default=300.,
                         metavar='temperature', help='Gas temperature (K)')
     parser.add_argument('-p', type=float, default=1.0,
@@ -72,9 +70,8 @@ def create_swarm_cfg(tmpdir, args):
     fname = tmpdir + '/base_cfg.txt'
     f = open(fname, 'w')
     f.write('output_dir = ' + tmpdir + '\n')
-    f.write('gas_file = ' + args.in_file + '\n')
-    f.write('gas_mixture_name = ' + args.gas_name + '\n')
-    f.write('swarm_name = ' + args.gas_name + '\n')
+    f.write('gas_file = ' + args.cs + '\n')
+    f.write('swarm_name = swarm_cli\n')
     f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
     f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
     f.write('consecutive_run = T\n')
@@ -98,7 +95,7 @@ def create_init_cfg(tmpdir):
 def create_fld_cfg(tmpdir, index, fld):
     fname = tmpdir + '/fld_' + str(index) + '.txt'
     f = open(fname, 'w')
-    f.write('swarm_fld = ' + str(fld) + '\n')
+    f.write('electric_field = ' + str(fld) + '\n')
     f.close()
     return fname
 

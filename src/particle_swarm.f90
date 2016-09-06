@@ -1,42 +1,62 @@
 program particle_swarm
-  use omp_lib
   use m_config
   use m_particle_core
   use m_particle_swarm
   use m_io
+  use m_units_constants, only: UC_pi, UC_lightspeed
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
-  type(CFG_t)        :: cfg
-  character(len=80)  :: swarm_name
-  integer            :: mm
-  integer            :: n_swarms_min, swarm_size
-  real(dp)           :: fld
-  type(PC_t)         :: pc               ! Particle data
-  type(SWARM_acc_t)  :: acc              ! Accuracy reqs.
-  real(dp)           :: td(SWARM_num_td) ! Transport data
-  real(dp)           :: td_dev(SWARM_num_td) ! Transport data error
-  logical            :: dry_run
+  integer, parameter  :: dp = kind(0.0d0)
+  type(CFG_t)         :: cfg
+  character(len=80)   :: swarm_name
+  integer             :: swarm_size
+  real(dp)            :: electric_field, degrees
+  real(dp)            :: rel_abs_acc(2)
+  type(PC_t)          :: pc    ! Particle data
+  type(SWARM_acc_t)   :: acc   ! Accuracy requirements
+  type(SWARM_field_t) :: field ! The field configuration
+  real(dp)            :: td(SWARM_num_td)
+  real(dp)            :: td_dev(SWARM_num_td)
+  logical             :: dry_run
 
   call initialize_all(cfg)
   call CFG_get(cfg, "dry_run", dry_run)
 
   if (.not. dry_run) then
-     call CFG_get(cfg, "swarm_min_number", n_swarms_min)
      call CFG_get(cfg, "swarm_size", swarm_size)
-     call CFG_get(cfg, "swarm_fld", fld)
-     call CFG_get(cfg, "acc_energy", acc%energy)
-     call CFG_get(cfg, "acc_mobility", acc%mobility)
-     call CFG_get(cfg, "acc_diffusion", acc%diffusion)
 
-     call SWARM_get_data(pc, fld, swarm_size, &
-          n_swarms_min, acc, td, td_dev)
+     ! Set electric and magnetic fields
+     call CFG_get(cfg, "magnetic_field", field%Bz)
+     call CFG_get(cfg, "electric_field", electric_field)
+     call CFG_get(cfg, "field_angle_degrees", degrees)
+     ! if (field%Bz > 0 .and. electric_field > &
+     !      0.1_dp * field%Bz * UC_lightspeed) then
+     !    stop "Magnetic field non-zero but E/B > 10% of speed of light"
+     ! end if
+     field%Ez = electric_field * cos(UC_pi * degrees / 180)
+     field%Ey = electric_field * sin(UC_pi * degrees / 180)
 
-     do mm = 1, SWARM_num_td
-        write(*, "(A25,E10.3,E9.2)") "   " // &
-             SWARM_td_names(mm), td(mm), td_dev(mm)
-     end do
+     field%B_vec = [0.0_dp, 0.0_dp, field%Bz]
+     field%E_vec = [0.0_dp, field%Ey, field%Ez]
+
+     ! Get accuracy requirements
+     call CFG_get(cfg, "acc_energy", rel_abs_acc)
+     acc%relative(i_energy) = rel_abs_acc(1)
+     acc%absolute(i_energy) = rel_abs_acc(2)
+
+     ! Get accuracy requirements
+     call CFG_get(cfg, "acc_mobility", rel_abs_acc)
+     acc%relative(i_mobility+2) = rel_abs_acc(1) ! +2 to set z-component
+     acc%absolute(i_mobility+2) = rel_abs_acc(2)
+
+     ! Get accuracy requirements
+     call CFG_get(cfg, "acc_diffusion", rel_abs_acc)
+     acc%relative(i_diffusion) = rel_abs_acc(1)
+     acc%absolute(i_diffusion) = rel_abs_acc(2)
+
+     call SWARM_get_data(pc, field, swarm_size, acc, td, td_dev)
+     call SWARM_print_results(td, td_dev)
   end if
 
 contains
@@ -166,12 +186,14 @@ contains
          "True means: only write simulation settings, no results'")
 
     ! General simulation parameters
-    call CFG_add(cfg, "swarm_fld", 1.0e7_dp, &
+    call CFG_add(cfg, "electric_field", 1.0e7_dp, &
          "The electric field")
+    call CFG_add(cfg, "magnetic_field", 0.0_dp, &
+         "The electric field")
+    call CFG_add(cfg, "field_angle_degrees", 90.0_dp, &
+         "The angle between the electric and magnetic field")
     call CFG_add(cfg, "swarm_name", "my_sim", &
          "The name of the swarm simulation")
-    call CFG_add(cfg, "swarm_min_number", 10, &
-         "The minimum number of swarms")
     call CFG_add(cfg, "swarm_size", 1000, &
          "The initial size of a swarm")
     call CFG_add(cfg, "output_dir", "output", &
@@ -189,8 +211,6 @@ contains
          "The gas pressure (bar)")
     call CFG_add(cfg, "gas_temperature", 300.0_dp, &
          "The gas temperature (Kelvin)")
-    call CFG_add(cfg, "gas_mixture_name", "N2", &
-         "The name of the gas mixture used")
     call CFG_add(cfg, "gas_components", (/"N2"/), &
          "The names of the gases used in the simulation", .true.)
     call CFG_add(cfg, "gas_file", "input/cross_sections_nitrogen.txt", &
