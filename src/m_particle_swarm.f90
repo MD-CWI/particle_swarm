@@ -6,37 +6,38 @@ module m_particle_swarm
 
   integer, parameter :: dp = kind(0.0d0)
 
-  !> Index of energy in transport data list
-  integer, parameter :: i_energy     = 1
-  !> Index of mobility(3) in transport data list
-  integer, parameter :: i_mobility   = i_energy + 1
-  !> Index of diffusion(2) in transport data list
-  integer, parameter :: i_diffusion  = i_mobility + 3
-  !> Index of ionization coeff. in transport data list
-  integer, parameter :: i_ionization = i_diffusion + 2
-  !> Index of attachment coeff. in transport data list
-  integer, parameter :: i_attachment = i_ionization + 1
+  !> The axis of gyration for electrons points in the z-direction (just as the
+  !> magnetic field)
+  real(dp), parameter :: SWARM_omega_unitvec(3) = [0.0_dp, 0.0_dp, 1.0_dp]
 
-  !> The number of transport data fields
-  integer, parameter :: SWARM_num_td = i_attachment
+  integer, parameter :: SWARM_num_td = 5
+  integer, parameter :: ix_energy    = 1
+  integer, parameter :: ix_mobility  = 2
+  integer, parameter :: ix_diffusion = 3
+  integer, parameter :: ix_alpha     = 4
+  integer, parameter :: ix_eta       = 5
 
-  character(len=20), parameter :: SWARM_td_names(SWARM_num_td) = &
-       [character(len=20) :: "energy (eV)", "mu_x", "mu_y", "mu_z", &
-       "D_L", "D_T", "alpha", "eta"]
-
-  !> Type storing accuracy requirements for a swarm
-  type SWARM_acc_t
-     real(dp) :: relative(SWARM_num_td) = 0.0_dp
-     real(dp) :: absolute(SWARM_num_td) = huge(1.0_dp)
-  end type SWARM_acc_t
+  !> Type for transport data (such as energy, mobility etc.)
+  type SWARM_td_t
+     character(len=20)     :: description    !< Description
+     integer               :: n_dim          !< Dimension of td(:)
+     integer               :: n_measurements !< Number of measurements
+     real(dp), allocatable :: val(:)         !< Actual values
+     real(dp), allocatable :: var(:)         !< Estimated variance (sum)
+     real(dp)              :: rel_acc        !< Req. relative accuracy
+     real(dp)              :: abs_acc        !< Req. absolute accuracy
+  end type SWARM_td_t
 
   !> Type storing the field configuration for a swarm
   type SWARM_field_t
-     real(dp) :: B_vec(3) !< Magnetic field vector
-     real(dp) :: E_vec(3) !< Electric field vector
-     real(dp) :: Bz       !< Magnetic field along z-axis (T)
-     real(dp) :: Ez       !< Electric field along z-axis (V/m)
-     real(dp) :: Ey       !< Electric field along y-axis (V/m)
+     real(dp) :: B_vec(3)     !< Magnetic field vector
+     real(dp) :: E_vec(3)     !< Electric field vector
+     real(dp) :: angle_deg    !< Angle between E and B in degrees
+     real(dp) :: Bz           !< Magnetic field along z-axis (T)
+     real(dp) :: Ez           !< Electric field along z-axis (V/m)
+     real(dp) :: Ey           !< Electric field along y-axis (V/m)
+     real(dp) :: omega_c      !< Gyration frequency
+     real(dp) :: ExB_drift(3) !< E x B drift velocity
   end type SWARM_field_t
 
   !> Type to collect particle statistics / properties
@@ -51,24 +52,67 @@ module m_particle_swarm
   end type part_stats_t
 
   type(SWARM_field_t), protected :: SWARM_field
-  real(dp), parameter :: SWARM_omega_unitvec(3) = [0.0_dp, 0.0_dp, 1.0_dp]
-  real(dp) :: SWARM_omega_c
-  real(dp) :: SWARM_plasma_drift_velocity(3)
 
-  public :: i_energy
-  public :: i_mobility
-  public :: i_diffusion
-  public :: i_ionization
-  public :: i_attachment
-  public :: SWARM_num_td
-  public :: SWARM_acc_t
+  public :: SWARM_td_t
   public :: SWARM_field_t
+  public :: SWARM_num_td
 
   ! Public routines from this module
+  public :: SWARM_initialize
   public :: SWARM_get_data
   public :: SWARM_print_results
+  public :: SWARM_particle_mover_analytic
+  public :: SWARM_particle_mover_boris
 
 contains
+
+  subroutine swarm_initialize(cfg, tds, field)
+    use m_config
+    type(CFG_t), intent(in)         :: cfg
+    type(SWARM_td_t), intent(inout) :: tds(:)
+    type(SWARM_field_t), intent(in) :: field
+    real(dp)                        :: rel_abs_acc(2)
+
+    SWARM_field = field
+
+    call init_td(tds(ix_energy), 1, "energy")
+    call init_td(tds(ix_mobility), 3, "mu")
+    call init_td(tds(ix_diffusion), 3, "diff")
+    call init_td(tds(ix_alpha), 1, "alpha")
+    call init_td(tds(ix_eta), 1, "eta")
+
+    ! Get accuracy requirements
+    call CFG_get(cfg, "acc_energy", rel_abs_acc)
+    tds(ix_energy)%rel_acc = rel_abs_acc(1)
+    tds(ix_energy)%abs_acc = rel_abs_acc(2)
+
+    call CFG_get(cfg, "acc_mobility", rel_abs_acc)
+    tds(ix_mobility)%rel_acc = rel_abs_acc(1)
+    tds(ix_mobility)%abs_acc = rel_abs_acc(2)
+
+    ! Get accuracy requirements
+    call CFG_get(cfg, "acc_diffusion", rel_abs_acc)
+    tds(ix_diffusion)%rel_acc = rel_abs_acc(1)
+    tds(ix_diffusion)%abs_acc = rel_abs_acc(2)
+
+  end subroutine swarm_initialize
+
+  subroutine init_td(td, n_dim, description)
+    type(SWARM_td_t), intent(inout) :: td
+    integer, intent(in)             :: n_dim
+    character(len=*), intent(in)    :: description
+
+    allocate(td%val(n_dim))
+    allocate(td%var(n_dim))
+
+    td%description    = description
+    td%n_dim          = n_dim
+    td%n_measurements = 0
+    td%val            = 0.0_dp
+    td%var            = 0.0_dp
+    td%rel_acc        = 0.0_dp
+    td%abs_acc        = huge(1.0_dp)
+  end subroutine init_td
 
   !> Advance a swarm over time
   subroutine swarm_advance(pc, tau, desired_num_part, growth_rate)
@@ -198,21 +242,36 @@ contains
     end do
   end subroutine update_particle_stats
 
-  subroutine get_td_from_ps(ps, td)
+  subroutine update_td_from_ps(tds, ps)
     use m_units_constants
+    type(SWARM_td_t), intent(inout) :: tds(:)
+    type(part_stats_t), intent(in)  :: ps
 
-    type(part_stats_t), intent(in)     :: ps
-    real(dp), intent(out) :: td(SWARM_num_td)
+    call update_td(tds(ix_energy), [0.5 * UC_elec_mass * ps%v2 / UC_elec_volt])
+    call update_td(tds(ix_mobility), ps%v / norm2(SWARM_field%E_vec))
+    call update_td(tds(ix_diffusion), ps%cov_xv / ps%n_samples)
+    call update_td(tds(ix_alpha), [ps%i_rate / norm2(ps%v)])
+    call update_td(tds(ix_eta), [ps%a_rate / norm2(ps%v)])
 
-    td(i_energy)                = 0.5 * UC_elec_mass * ps%v2 / UC_elec_volt
-    td(i_mobility:i_mobility+2) = ps%v / norm2(SWARM_field%E_vec)             ! Mobility
-    td(i_diffusion)             = ps%cov_xv(3) / ps%n_samples                 ! Long. diffusion
-    td(i_diffusion+1)           = 0.5_dp * sum(ps%cov_xv(1:2)) / ps%n_samples ! Trans. diffusion
-    td(i_ionization)            = ps%i_rate / norm2(ps%v)
-    td(i_attachment)            = ps%a_rate / norm2(ps%v)
     ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
     ! td(8)     = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
-  end subroutine get_td_from_ps
+  end subroutine update_td_from_ps
+
+  subroutine update_td(td, new_val)
+    type(SWARM_td_t), intent(inout) :: td
+    real(dp), intent(in)            :: new_val(td%n_dim)
+    real(dp)                        :: delta(td%n_dim), fac
+
+    td%n_measurements = td%n_measurements + 1
+    fac               = 1.0_dp / td%n_measurements
+    delta             = new_val - td%val
+
+    ! Update mean
+    td%val = td%val + fac * delta
+
+    ! Update variance
+    td%var = td%var + delta * (new_val - td%val)
+  end subroutine update_td
 
   subroutine new_swarm(pc, swarm_size)
     use m_units_constants
@@ -227,58 +286,39 @@ contains
 
     do ll = 1, swarm_size
        x   = 0
-       a = SWARM_field%E_vec * UC_elec_q_over_m
+       a   = SWARM_field%E_vec * UC_elec_q_over_m
        vel = sqrt(2 * eV * UC_elem_charge/UC_elec_mass)
        v   = pc%rng%sphere(vel)
        call pc%create_part(x, v, a, 1.0_dp, 0.0_dp)
     end do
   end subroutine new_swarm
 
-  subroutine SWARM_get_data(pc, field, swarm_size, acc, td, td_dev)
+  subroutine SWARM_get_data(pc, swarm_size, tds)
     use m_units_constants
 
     type(PC_t), intent(inout)       :: pc
-    type(SWARM_field_t), intent(in) :: field
     integer, intent(in)             :: swarm_size
-    type(SWARM_acc_t), intent(in)   :: acc
-    real(dp), intent(out)           :: td(SWARM_num_td)
-    real(dp), intent(out)           :: td_dev(SWARM_num_td)
+    type(SWARM_td_t), intent(inout) :: tds(:)
 
     integer, parameter  :: n_swarms_min = 10
+    integer, parameter  :: n_swarms_max = 10000
     real(dp), parameter :: fac          = 0.5 * UC_elec_mass/UC_elem_charge
     integer             :: n_coll_times
     integer             :: n, n_swarms
     real(dp)            :: tau_coll
-    real(dp)            :: td_prev(SWARM_num_td)
     real(dp)            :: growth_rate
-    integer             :: n_accurate
     type(part_stats_t)  :: ps
 
-    n_swarms = 0
-    td_prev  = 0.0_dp
-    n_accurate = 0
-
-    SWARM_field = field
-
-    if (abs(field%Bz) > 0) then
-       ! Check whether the magnetic field is large enough
-       SWARM_omega_c = abs(UC_elem_charge * field%Bz / UC_elec_mass)
-       SWARM_plasma_drift_velocity = &
-            [field%Ey * field%Bz, 0.0_dp, 0.0_dp] / field%Bz**2
-
-       pc%particle_mover => advance_particle_analytic
-    end if
-
     call create_swarm(pc, tau_coll, swarm_size)
-
     call update_particle_stats(pc, ps, .true.)
 
     ! Loop over the swarms until converged
-    do while (n_swarms < n_swarms_min .or. n_accurate < n_swarms_min)
+    do n_swarms = 1, n_swarms_max
 
        ! Estimate the time scale for energy relaxation, given by:
        ! energy / (d/dt energy), in units of the collision time.
-       n_coll_times = nint(fac * ps%v2 / abs(dot_product(SWARM_field%E_vec, ps%v) * tau_coll))
+       n_coll_times = nint(abs(fac * ps%v2 / &
+            (norm2(SWARM_field%E_vec * ps%v) * tau_coll)))
 
        ! For safety, limit n_coll_times to 10 -- 2000
        n_coll_times = max(10, n_coll_times)
@@ -287,23 +327,14 @@ contains
        growth_rate = abs(ps%i_rate - ps%a_rate)
        do n = 1, n_coll_times
           call swarm_advance(pc, tau_coll, swarm_size, growth_rate)
-          call update_particle_stats(pc, ps, .false.)
+          call update_particle_stats(pc, ps, n == 1)
        end do
 
-       n_swarms = n_swarms + 1
-       call get_td_from_ps(ps, td)
+       call update_td_from_ps(tds, ps)
 
-       if (n_swarms == 1) then
-          td_prev = td
-       else
-          ! Using the current and previous transport data, estimate the
-          ! standard deviation (or the error)
-          td_dev = sqrt(real(n_swarms, dp)) * abs(td - td_prev)
-
+       if (n_swarms >= n_swarms_min) then
           ! Check whether the results are accurate enough
-          if (check_accuracy(td, td_dev, acc)) n_accurate = n_accurate + 1
-
-          td_prev = td
+          if (check_accuracy(tds)) exit
        end if
 
        ! Advance over several collisions for the diffusion measurements
@@ -311,21 +342,31 @@ contains
        call swarm_advance(pc, n_coll_times * tau_coll, &
             swarm_size, growth_rate)
     end do
+
+    if (n_swarms == n_swarms_max + 1) then
+       print *, "Failed to converge in ", n_swarms_max, "iterations"
+    end if
+
   end subroutine SWARM_get_data
 
   !> Check whether the transport data td with estimated deviation dev is
   !> accurate enough according to the requirements in acc
-  logical function check_accuracy(td, dev, acc)
-    real(dp), intent(in)          :: td(SWARM_num_td)  !< The transport data
-    real(dp), intent(in)          :: dev(SWARM_num_td) !< The estimated error in td
-    type(SWARM_acc_t), intent(in) :: acc               !< The accuracy requirements
-    integer                       :: i
+  logical function check_accuracy(tds)
+    type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
+    real(dp)                     :: stddev, mean, var
+    integer                      :: i, n
 
     check_accuracy = .true.
 
     do i = 1, SWARM_num_td
-       if (dev(i) > acc%relative(i) * abs(td(i)) .and. &
-            dev(i) > acc%absolute(i)) then
+       ! Below we use the norm for vector-based transport data, so that
+       ! orientation of the field should not matter
+       n      = tds(i)%n_measurements
+       mean   = norm2(tds(i)%val)             ! Mean
+       var    = norm2(tds(i)%var / (n-1)) / n ! Variance of the mean
+       stddev = sqrt(var)                     ! Standard deviation of the mean
+
+       if (stddev > tds(i)%rel_acc * mean .and. stddev > tds(i)%abs_acc) then
           check_accuracy = .false.
           exit
        end if
@@ -359,8 +400,6 @@ contains
     ! when the swarm is approximately relaxed to the background field.
     tau = sqrt(0.5_dp * en_eV * UC_elec_mass / UC_elem_charge) / &
          norm2(SWARM_field%E_vec)
-
-    print *, tau
 
     ! Create linear table with unit variance and zero mean
     do i = 1, frame_size
@@ -404,40 +443,53 @@ contains
 
   end subroutine create_swarm
 
-  subroutine SWARM_print_results(td, dev)
-    real(dp), intent(in)            :: td(SWARM_num_td)  !< The transport data
-    real(dp), intent(in)            :: dev(SWARM_num_td) !< The estimated error in td
-    integer                         :: i
+  subroutine SWARM_print_results(tds)
+    type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
+    integer                      :: i, i_dim
+    real(dp)                     :: fac
 
-    write(*, "(A20,E10.3)") " Bz (T)             ", SWARM_field%Bz
-    write(*, "(A20,E10.3)") " Ez (V/m)           ", SWARM_field%Ez
-    write(*, "(A20,E10.3)") " Ey (V/m)           ", SWARM_field%Ey
+    i = tds(1)%n_measurements
+    fac = sqrt(1.0_dp / (i * (i-1)))
+
+    write(*, "(A24,2E12.4)") "Bz = ", SWARM_field%Bz, 0.0_dp
+    write(*, "(A24,2E12.4)") "Ez = ", SWARM_field%Ez, 0.0_dp
+    write(*, "(A24,2E12.4)") "Ey = ", SWARM_field%Ey, 0.0_dp
+    write(*, "(A24,2E12.4)") "angle = ", SWARM_field%angle_deg, 0.0_dp
 
     do i = 1, SWARM_num_td
-       write(*, "(A20,E10.3,E9.2)") " " // SWARM_td_names(i), td(i), dev(i)
+       if (tds(i)%n_dim == 1) then
+          write(*, "(A24,2E12.4)") trim(tds(i)%description) // " = ", &
+               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac
+       else
+
+          do i_dim = 1, tds(i)%n_dim
+             write(*, "(A20,I0,A,2E12.4)") trim(tds(i)%description) // "_", &
+                  i_dim, " = ", tds(i)%val(i_dim), &
+                  sqrt(tds(i)%var(i_dim)) * fac
+          end do
+       end if
     end do
 
   end subroutine SWARM_print_results
 
   !> Advance the particle position and velocity over time dt taking into account
-  !> a constant electric and magnetic field
-  subroutine advance_particle_analytic(part, dt)
+  !> a constant electric and magnetic field, using the analytic solution.
+  subroutine SWARM_particle_mover_analytic(part, dt)
     use m_units_constants
     type(PC_part_t), intent(inout) :: part
     real(dp), intent(in)           :: dt
-
-    real(dp) :: rc(3), rc_rot(3), theta
+    real(dp)                       :: rc(3), rc_rot(3), theta
 
     ! First the motion perpendicular to the magnetic field
 
     ! Subtract the plasma drift velocity
-    part%v = part%v - SWARM_plasma_drift_velocity
+    part%v = part%v - SWARM_field%ExB_drift
 
     ! Determine rc, the vector pointing from the center of gyration
-    rc = cross_product(part%v, SWARM_omega_unitvec) / SWARM_omega_c
+    rc = cross_product(part%v, SWARM_omega_unitvec) / SWARM_field%omega_c
 
     ! Determine rotation angle
-    theta = dt * SWARM_omega_c
+    theta = dt * SWARM_field%omega_c
 
     ! Rotate position and velocity
     part%v = rotate_around_axis(part%v, SWARM_omega_unitvec, theta)
@@ -447,7 +499,7 @@ contains
     part%x = part%x + (rc_rot - rc)
 
     ! Add back the plasma drift velocity
-    part%v = part%v + SWARM_plasma_drift_velocity
+    part%v = part%v + SWARM_field%ExB_drift
 
     ! Now the motion parallel to the magnetic field
     part%v(3) = part%v(3) + 0.5_dp * dt * UC_elec_q_over_m * SWARM_field%Ez
@@ -456,7 +508,36 @@ contains
 
     ! Update time left
     part%t_left = part%t_left - dt
-  end subroutine advance_particle_analytic
+  end subroutine SWARM_particle_mover_analytic
+
+  !> Advance the particle position and velocity over time dt taking into account
+  !> a constant electric and magnetic field, using Boris' method.
+  subroutine SWARM_particle_mover_boris(part, dt)
+    use m_units_constants
+    type(PC_part_t), intent(inout) :: part
+    real(dp), intent(in)           :: dt
+    real(dp) :: t_vec(3), tmp(3)
+
+    ! Push the particle over dt/2
+    part%x = part%x + 0.5_dp * dt * part%v + 0.125_dp * dt**2 * &
+         UC_elec_q_over_m * SWARM_field%E_vec
+    part%v = part%v + 0.5_dp * dt * UC_elec_q_over_m * SWARM_field%E_vec
+
+    ! Rotate the velocity
+    tmp    = 0.5_dp * dt * SWARM_field%B_vec * UC_elec_q_over_m
+    t_vec  = 2 * tmp / (1.d0 + (norm2(tmp))**2)
+    tmp    = part%v + cross_product(part%v, tmp)
+    tmp    = cross_product(tmp, t_vec)
+    part%v = part%v + tmp
+
+    ! Push the particle over dt/2
+    part%x = part%x + 0.5_dp * dt * part%v + 0.125_dp * dt**2 * &
+         UC_elec_q_over_m * SWARM_field%E_vec
+    part%v = part%v + 0.5_dp * dt * UC_elec_q_over_m * SWARM_field%E_vec
+
+    ! Update time left
+    part%t_left = part%t_left - dt
+  end subroutine SWARM_particle_mover_boris
 
   !> Rotate a vector around an axis over an angle theta
   pure function rotate_around_axis(vec, axis, theta) result(rot)
