@@ -1,5 +1,4 @@
 program particle_swarm
-  use omp_lib
   use m_config
   use m_particle_core
   use m_particle_swarm
@@ -7,36 +6,25 @@ program particle_swarm
 
   implicit none
 
-  integer, parameter :: dp = kind(0.0d0)
-  type(CFG_t)        :: cfg
-  character(len=80)  :: swarm_name
-  integer            :: mm
-  integer            :: n_swarms_min, swarm_size
-  real(dp)           :: fld
-  type(PC_t)         :: pc               ! Particle data
-  type(SWARM_acc_t)  :: acc              ! Accuracy reqs.
-  real(dp)           :: td(SWARM_num_td) ! Transport data
-  real(dp)           :: td_dev(SWARM_num_td) ! Transport data error
-  logical            :: dry_run
+  integer, parameter  :: dp = kind(0.0d0)
+  type(CFG_t)         :: cfg
+  character(len=80)   :: swarm_name
+  integer             :: swarm_size
+  type(PC_t)          :: pc    ! Particle data
+  type(SWARM_field_t) :: field ! The field configuration
+  type(SWARM_td_t)    :: td(SWARM_num_td)
+  logical             :: dry_run
 
   call initialize_all(cfg)
   call CFG_get(cfg, "dry_run", dry_run)
 
   if (.not. dry_run) then
-     call CFG_get(cfg, "swarm_min_number", n_swarms_min)
+     call get_field_configuration(cfg, field)
      call CFG_get(cfg, "swarm_size", swarm_size)
-     call CFG_get(cfg, "swarm_fld", fld)
-     call CFG_get(cfg, "acc_energy", acc%energy)
-     call CFG_get(cfg, "acc_mobility", acc%mobility)
-     call CFG_get(cfg, "acc_diffusion", acc%diffusion)
 
-     call SWARM_get_data(pc, fld, swarm_size, &
-          n_swarms_min, acc, td, td_dev)
-
-     do mm = 1, SWARM_num_td
-        write(*, "(A25,E10.3,E9.2)") "   " // &
-             SWARM_td_names(mm), td(mm), td_dev(mm)
-     end do
+     call SWARM_initialize(cfg, td, field)
+     call SWARM_get_data(pc, swarm_size, td)
+     call SWARM_print_results(td)
   end if
 
 contains
@@ -46,16 +34,19 @@ contains
     use m_gas
     use m_cross_sec
     use m_units_constants
-    type(CFG_t), intent(inout)      :: cfg
-    integer                         :: nn, tbl_size, max_num_part
-    integer                         :: swarm_size, n_gas_comp, n_gas_frac
-    real(dp)                        :: pressure, temperature, max_ev
-    character(len=200)              :: cs_file, output_dir
-    character(LEN=200)              :: cfg_name, prev_name, tmp_name
-    character(len=20), allocatable  :: gas_names(:)
-    real(dp), allocatable           :: gas_fracs(:)
-    type(CS_t), allocatable         :: cross_secs(:)
-    logical                         :: consecutive_run
+    type(CFG_t), intent(inout)     :: cfg
+    integer                        :: nn, tbl_size, max_num_part
+    integer                        :: swarm_size, n_gas_comp, n_gas_frac
+    real(dp)                       :: pressure, temperature, max_ev
+    real(dp)                       :: magnetic_field, tmp
+    character(len=200)             :: cs_file, output_dir
+    character(len=200)             :: cfg_name, prev_name, tmp_name
+    character(len=20)              :: particle_mover
+    character(len=20), allocatable :: gas_names(:)
+    real(dp), allocatable          :: gas_fracs(:)
+    type(CS_t), allocatable        :: cross_secs(:)
+    logical                        :: consecutive_run
+    logical                        :: dry_run
 
     ! Create default parameters for the simulation (routine contained below)
     call create_sim_config(cfg)
@@ -102,7 +93,7 @@ contains
        call CFG_write(cfg, trim(tmp_name))
 
        call CFG_get(cfg, "gas_file", cs_file)
-       call CFG_get(cfg, "part_max_energy_ev", max_ev)
+       call CFG_get(cfg, "particle_max_energy_ev", max_ev)
 
        do nn = 1, n_gas_comp
           call CS_add_from_file(trim(cs_file), &
@@ -114,7 +105,7 @@ contains
             trim(output_dir) // "/" // trim(swarm_name) // "_cs_summary.txt")
 
        print *, "Initializing particle model", 1
-       call CFG_get(cfg, "part_lkptbl_size", tbl_size)
+       call CFG_get(cfg, "particle_lkptbl_size", tbl_size)
        call CFG_get(cfg, "swarm_size", swarm_size)
 
        ! Allocate storage for 8 times the swarm size. There are checks in place
@@ -154,6 +145,26 @@ contains
             trim(tmp_name) // "_lt.dat", get_random_seed())
     end if
 
+    call CFG_get(cfg, "particle_mover", particle_mover)
+    call CFG_get(cfg, "magnetic_field", magnetic_field)
+    call CFG_get(cfg, "dry_run", dry_run)
+
+    select case (trim(particle_mover))
+    case ("analytic")
+       pc%particle_mover => SWARM_particle_mover_analytic
+       if (.not. dry_run .and. abs(magnetic_field) < epsilon(1.0_dp)) &
+            stop "Analytic particle mover can only be used for |B| > 0"
+    case ("boris")
+       pc%particle_mover => SWARM_particle_mover_boris
+       ! Limit time step to boris_dt_factor / cyclotron freq.
+       call CFG_get(cfg, "boris_dt_factor", tmp)
+       pc%dt_max = tmp * 2 * UC_pi / abs(magnetic_field * UC_elec_q_over_m)
+    case ("verlet")
+       pc%particle_mover => PC_verlet_advance
+    case default
+       stop "Incorrect particle mover selected"
+    end select
+
   end subroutine initialize_all
 
   !> Create the parameters and their default values for the simulation
@@ -166,31 +177,33 @@ contains
          "True means: only write simulation settings, no results'")
 
     ! General simulation parameters
-    call CFG_add(cfg, "swarm_fld", 1.0e7_dp, &
+    call CFG_add(cfg, "electric_field", 1.0e7_dp, &
          "The electric field")
+    call CFG_add(cfg, "magnetic_field", 0.0_dp, &
+         "The electric field")
+    call CFG_add(cfg, "field_angle_degrees", 90.0_dp, &
+         "The angle between the electric and magnetic field")
     call CFG_add(cfg, "swarm_name", "my_sim", &
          "The name of the swarm simulation")
-    call CFG_add(cfg, "swarm_min_number", 10, &
-         "The minimum number of swarms")
     call CFG_add(cfg, "swarm_size", 1000, &
          "The initial size of a swarm")
     call CFG_add(cfg, "output_dir", "output", &
          "The output directory (include no trailing slash!)")
 
-    call CFG_add(cfg, "acc_energy", [1.0e-2_dp, 0.0_dp], &
+    call CFG_add(cfg, "acc_energy", [5.0e-3_dp, 0.0_dp], &
          "The required rel/abs accuracy of the energy")
-    call CFG_add(cfg, "acc_mobility", [1.0e-2_dp, 0.0_dp], &
+    call CFG_add(cfg, "acc_mobility", [5.0e-3_dp, 0.0_dp], &
          "The required rel/abs accuracy of the mobility")
     call CFG_add(cfg, "acc_diffusion", [1.0e-2_dp, 0.0_dp], &
          "The required rel/abs accuracy of the diffusion coeff.")
+    call CFG_add(cfg, "acc_alpha", [5.0e-3_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the ionization coeff.")
 
     ! Gas parameters
     call CFG_add(cfg, "gas_pressure", 1.0_dp, &
          "The gas pressure (bar)")
     call CFG_add(cfg, "gas_temperature", 300.0_dp, &
          "The gas temperature (Kelvin)")
-    call CFG_add(cfg, "gas_mixture_name", "N2", &
-         "The name of the gas mixture used")
     call CFG_add(cfg, "gas_components", (/"N2"/), &
          "The names of the gases used in the simulation", .true.)
     call CFG_add(cfg, "gas_file", "input/cross_sections_nitrogen.txt", &
@@ -199,10 +212,14 @@ contains
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
 
     ! Particle model related parameters
-    call CFG_add(cfg, "part_lkptbl_size", 10000, &
+    call CFG_add(cfg, "particle_lkptbl_size", 10000, &
          "The size of the lookup table for the collision rates")
-    call CFG_add(cfg, "part_max_energy_ev", 500.0_dp, &
+    call CFG_add(cfg, "particle_max_energy_ev", 500.0_dp, &
          "The maximum energy in eV for particles in the simulation")
+    call CFG_add(cfg, "particle_mover", "verlet", &
+         "Which particle mover to use. Options: analytic, verlet, boris")
+    call CFG_add(cfg, "boris_dt_factor", 0.1_dp, &
+         "The maximum time step in terms of the cylotron frequency")
   end subroutine create_sim_config
 
   function get_random_seed() result(seed)
@@ -214,5 +231,34 @@ contains
        seed(i) = ishftc(time, i*8)
     end do
   end function get_random_seed
+
+  subroutine get_field_configuration(cfg, field)
+    use m_units_constants
+    type(CFG_t), intent(in)            :: cfg
+    type(SWARM_field_t), intent(inout) :: field
+    real(dp)                           :: electric_field, degrees
+
+    ! Set electric and magnetic fields
+    call CFG_get(cfg, "magnetic_field", field%Bz)
+    call CFG_get(cfg, "electric_field", electric_field)
+    call CFG_get(cfg, "field_angle_degrees", degrees)
+
+    if (field%Bz > 0 .and. electric_field > &
+         0.1_dp * field%Bz * UC_lightspeed) then
+       print *, "Warning: B non-zero but E/B > 10% of speed of light"
+    end if
+
+    field%angle_deg = degrees
+    field%Ez        = electric_field * cos(UC_pi * degrees / 180)
+    field%Ey        = electric_field * sin(UC_pi * degrees / 180)
+
+    field%B_vec = [0.0_dp, 0.0_dp, field%Bz]
+    field%E_vec = [0.0_dp, field%Ey, field%Ez]
+
+    field%omega_c   = -UC_elec_charge * field%Bz / UC_elec_mass
+    field%ExB_drift = [field%Ey * field%Bz, 0.0_dp, 0.0_dp] / &
+         max(epsilon(1.0_dp), field%Bz**2)
+
+  end subroutine get_field_configuration
 
 end program particle_swarm
