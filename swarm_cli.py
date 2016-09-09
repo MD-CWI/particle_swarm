@@ -76,6 +76,9 @@ def get_args():
     parser.add_argument('-D', type=float, nargs=2, default=(1e-2, 0.0),
                         metavar=('rel', 'abs'),
                         help='Required rel./abs. error in diff. coeff')
+    parser.add_argument('-a', type=float, nargs=2, default=(5e-3, 10.0),
+                        metavar=('rel', 'abs'),
+                        help='Required rel./abs. error in alpha')
     return parser.parse_args()
 
 
@@ -92,6 +95,7 @@ def create_swarm_cfg(tmpdir, args):
     f.write('acc_energy = ' + ' '.join(map(str, args.en)) + '\n')
     f.write('acc_mobility = ' + ' '.join(map(str, args.mu)) + '\n')
     f.write('acc_diffusion = ' + ' '.join(map(str, args.D)) + '\n')
+    f.write('acc_alpha = ' + ' '.join(map(str, args.a)) + '\n')
     f.write('electric_field = ' + str(args.E) + '\n')
     f.write('magnetic_field = ' + str(args.B) + '\n')
     f.write('field_angle_degrees = ' + str(args.angle) + '\n')
