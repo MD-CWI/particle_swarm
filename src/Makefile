@@ -1,4 +1,4 @@
-FC 		:= gfortran
+FC	:= gfortran
 FFLAGS	:= -Wall -O2 -std=f2008
 
 ifeq ($(DEBUG), 1)
@@ -28,4 +28,4 @@ clean:
 
 # Dependency information
 m_particle_swarm.o:	m_io.o
-../particle_swarm:	$(OBJS)
+../particle_swarm:	$(OBJS) ../fosito/libfosito.a ../particle_core/libparticle_core.a
