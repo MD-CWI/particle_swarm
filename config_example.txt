@@ -1,11 +1,12 @@
 output_dir = output
 swarm_name = my_example
 gas_file = input/cs_example.txt
-gas_mixture_name = N2
 gas_components = N2
 gas_fractions = 1.0
 swarm_size = 1000
-swarm_fld = 1e7
-part_lkptbl_size = 10000
+electric_field = 1e7
+magnetic_field = 40
+field_angle_degrees = 90
 consecutive_run = f
 dry_run = f
+particle_mover = analytic
