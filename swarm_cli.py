@@ -27,28 +27,39 @@ def get_args():
         transport data from swarm simulations.
         Author: Jannis Teunissen, jannis@teunissen.net''',
         epilog='''Example:
-        ./swarm_cli.py crosssec.txt results.txt -gc N2 1.0 -flist 1e7 2e7''')
-    parser.add_argument('in_file', type=str,
-                        help='Input file with cross sections')
-    parser.add_argument('out_file', type=str,
-                        help='Output file with transport data')
+        ./swarm_cli.py crosssec.txt -gc N2 1.0 -vary E -vlin 1e7 2e7 10''')
+    parser.add_argument('cs', type=str,
+                        help='File with cross sections')
+    parser.add_argument('-out_file', type=str, default='results.txt',
+                        help='Output file, default is results.txt')
     parser.add_argument('-gc', dest='gas_comps', type=str, nargs='+',
                         required=True, metavar='gas frac',
                         help='List of gas names and fractions, '
                         'for example: N2 0.8 O2 0.2')
+    parser.add_argument('-vary', type=str, choices=['E', 'B', 'angle'],
+                        default='E', required=True,
+                        help='Which quantity to vary')
+    parser.add_argument('-mover', type=str,
+                        choices=['analytic', 'boris', 'verlet'],
+                        default='verlet', help='Choice of particle mover')
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument('-flist', type=float, nargs='+', metavar='E',
-                       help='List of electric fields (V/m)')
-    group.add_argument('-flin', type=float, nargs=3,
+    group.add_argument('-vlist', type=float, nargs='+', metavar='val',
+                       help='List of values to use')
+    group.add_argument('-vlin', type=float, nargs=3,
                        metavar=('min', 'max', 'N'),
-                       help='Linear range of N electric fields (V/m)')
-    group.add_argument('-flog', type=float, nargs=3,
+                       help='Linear range of values to use')
+    group.add_argument('-vlog', type=float, nargs=3,
                        metavar=('min', 'max', 'N'),
-                       help='Logarithmic range of N electric fields (V/m)')
+                       help='Logarithmic range of values to use')
 
-    parser.add_argument('-gn', dest='gas_name', type=str, default='GAS',
-                        help='Gas mixture name')
+    parser.add_argument('-E', type=float, default=1e7,
+                         help='Electric field (V/m)')
+    parser.add_argument('-B', type=float, default=0.0,
+                         help='Magnetic field (V/m)')
+    parser.add_argument('-angle', type=float, default=0.0,
+                         help='Angle between E and B (degrees)')
+
     parser.add_argument('-T', type=float, default=300.,
                         metavar='temperature', help='Gas temperature (K)')
     parser.add_argument('-p', type=float, default=1.0,
@@ -72,9 +83,8 @@ def create_swarm_cfg(tmpdir, args):
     fname = tmpdir + '/base_cfg.txt'
     f = open(fname, 'w')
     f.write('output_dir = ' + tmpdir + '\n')
-    f.write('gas_file = ' + args.in_file + '\n')
-    f.write('gas_mixture_name = ' + args.gas_name + '\n')
-    f.write('swarm_name = ' + args.gas_name + '\n')
+    f.write('gas_file = ' + args.cs + '\n')
+    f.write('swarm_name = swarm_cli\n')
     f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
     f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
     f.write('consecutive_run = T\n')
@@ -82,6 +92,10 @@ def create_swarm_cfg(tmpdir, args):
     f.write('acc_energy = ' + ' '.join(map(str, args.en)) + '\n')
     f.write('acc_mobility = ' + ' '.join(map(str, args.mu)) + '\n')
     f.write('acc_diffusion = ' + ' '.join(map(str, args.D)) + '\n')
+    f.write('electric_field = ' + str(args.E) + '\n')
+    f.write('magnetic_field = ' + str(args.B) + '\n')
+    f.write('field_angle_degrees = ' + str(args.angle) + '\n')
+    f.write('particle_mover = ' + args.mover + '\n')
     f.close()
     return fname
 
@@ -95,10 +109,10 @@ def create_init_cfg(tmpdir):
     return fname
 
 
-def create_fld_cfg(tmpdir, index, fld):
-    fname = tmpdir + '/fld_' + str(index) + '.txt'
+def create_var_cfg(tmpdir, index, varname, value):
+    fname = tmpdir + '/var_' + str(index) + '.txt'
     f = open(fname, 'w')
-    f.write('swarm_fld = ' + str(fld) + '\n')
+    f.write(varname + ' = ' + str(value) + '\n')
     f.close()
     return fname
 
@@ -121,12 +135,12 @@ if __name__ == '__main__':
     args = get_args()
 
     # Make sure we have a list of electric fields
-    if args.flin:
-        args.flist = np.linspace(args.flin[0], args.flin[1], args.flin[2])
-    elif args.flog:
-        args.flist = np.logspace(math.log10(args.flog[0]),
-                                 math.log10(args.flog[1]), args.flog[2])
-    n_flds = len(args.flist)
+    if args.vlin:
+        args.vlist = np.linspace(args.vlin[0], args.vlin[1], args.vlin[2])
+    elif args.vlog:
+        args.vlist = np.logspace(math.log10(args.vlog[0]),
+                                 math.log10(args.vlog[1]), args.vlog[2])
+    n_flds = len(args.vlist)
 
     try:
         tmpdir = tempfile.mkdtemp(dir=os.getcwd())
@@ -143,9 +157,14 @@ if __name__ == '__main__':
         mgr = Manager()
         num = mgr.Value('i', 0)
 
-        for i, fld in enumerate(args.flist):
-            fld_cfg = create_fld_cfg(tmpdir, i, fld)
-            cmd_list.append([['./particle_swarm', base_cfg, fld_cfg], num])
+        for i, value in enumerate(args.vlist):
+            if args.vary == 'E':
+                var_cfg = create_var_cfg(tmpdir, i, 'electric_field', value)
+            elif args.vary == 'B':
+                var_cfg = create_var_cfg(tmpdir, i, 'magnetic_field', value)
+            elif args.vary == 'angle':
+                var_cfg = create_var_cfg(tmpdir, i, 'field_angle_degrees', value)
+            cmd_list.append([['./particle_swarm', base_cfg, var_cfg], num])
 
         res = pool.map_async(pswarm_wrapper, cmd_list)
         while num.value < n_flds:
@@ -168,7 +187,7 @@ if __name__ == '__main__':
 
     for i, res in enumerate(swarm_data):
         for j, line in enumerate(res.splitlines()):
-            td_matrix[i, j] = line.split()[1]
+            td_matrix[i, j] = line.split()[2]
 
     header = ' '.join(td_names)
     np.savetxt(args.out_file, td_matrix, fmt=b'%10.3e', header=header)
