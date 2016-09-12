@@ -86,28 +86,28 @@ cross sections can directly be used.
 The first line of the output is a header with the names of the columns, below
 which there is a matrix of values. This matrix contains the following columns:
 
-* `Bz`: magnetic field (Tesla)
-* `Ez`: z-component of electric field (V/m)
-* `Ey`: y-component of electric field (V/m)
-* `angle`: angle between **E** and **B** in degrees
-* `omega_c`: gyration frequency (rad/s)
-* `vel_1`: x-component of mean velocity (m/s)
-* `vel_2`: y-component
-* `vel_3`: z-component
-* `vel_sq_1`: x-component of mean squared velocity
-* `vel_sq_2`: y-component
-* `vel_sq_3`: z-component
-* `diff_1`: x-component of diagonal diffusion coefficient (m2/s)
-* `diff_2`: y-component
-* `diff_3`: z-component
-* `alpha`: ionization coefficient (1/m)
-* `eta`: attachment coefficient (1/m)
-* `coll_rate`: actual collision rate (1/s)
-* `energy`: mean energy (eV)
-* `mu_E`: mobility parallel to **E** (m2/Vs)
-* `mu_B`: mobility parallel to **B** (m2/Vs)
-* `mu_xB`: mobility perpendicular to **B** (m2/Vs)
-* `mu_ExB`: mobility in **ExB**-direction (m2/Vs) (the **ExB**-velocity over `Ey`)
+1. `Bz`: magnetic field (Tesla)
+2. `Ez`: z-component of electric field (V/m)
+3. `Ey`: y-component of electric field (V/m)
+4. `angle`: angle between **E** and **B** in degrees
+5. `omega_c`: gyration frequency (rad/s)
+6. `energy`: mean energy (eV)
+7. `mu_E`: mobility parallel to **E** (m2/Vs)
+8. `mu_B`: mobility parallel to **B** (m2/Vs)
+9. `mu_xB`: mobility perpendicular to **B** (m2/Vs)
+10. `mu_ExB`: mobility in **ExB**-direction (m2/Vs) (the **ExB**-velocity over `Ey`)
+11. `alpha`: ionization coefficient (1/m)
+12. `eta`: attachment coefficient (1/m)
+13. `coll_rate`: actual collision rate (1/s)
+14. `diff_1`: x-component of diagonal diffusion coefficient (m2/s)
+15. `diff_2`: y-component
+16. `diff_3`: z-component
+17. `vel_1`: x-component of mean velocity (m/s)
+18. `vel_2`: y-component
+19. `vel_3`: z-component
+20. `vel_sq_1`: x-component of mean squared velocity
+21. `vel_sq_2`: y-component
+22. `vel_sq_3`: z-component
 
 ## Which particle mover to use
 

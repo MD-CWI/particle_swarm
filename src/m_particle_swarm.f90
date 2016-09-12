@@ -14,12 +14,12 @@ module m_particle_swarm
   ! can be derived from these (e.g., the mean energy or mobility) are printed as
   ! well.
   integer, parameter :: SWARM_num_td = 6
-  integer, parameter :: ix_vel       = 1
-  integer, parameter :: ix_vel_sq    = 2
-  integer, parameter :: ix_diffusion = 3
-  integer, parameter :: ix_alpha     = 4
-  integer, parameter :: ix_eta       = 5
-  integer, parameter :: ix_coll_rate = 6
+  integer, parameter :: ix_alpha     = 1
+  integer, parameter :: ix_eta       = 2
+  integer, parameter :: ix_coll_rate = 3
+  integer, parameter :: ix_diffusion = 4
+  integer, parameter :: ix_vel       = 5
+  integer, parameter :: ix_vel_sq    = 6
 
   !> Type for storing transport data
   type SWARM_td_t
@@ -307,6 +307,7 @@ contains
   end subroutine new_swarm
 
   subroutine SWARM_get_data(pc, swarm_size, tds)
+    use iso_fortran_env, only: error_unit
     use m_units_constants
 
     type(PC_t), intent(inout)       :: pc
@@ -358,7 +359,8 @@ contains
     end do
 
     if (n_swarms == n_swarms_max + 1) then
-       print *, "Failed to converge in ", n_swarms_max, "iterations"
+       write(error_unit, *) "No convergence in ", n_swarms_max, "iterations"
+       error stop
     end if
 
   end subroutine SWARM_get_data
@@ -473,21 +475,6 @@ contains
     write(*, "(A24,2E12.4)") "angle = ", SWARM_field%angle_deg, 0.0_dp
     write(*, "(A24,2E12.4)") "omega_c = ", SWARM_field%omega_c, 0.0_dp
 
-    do i = 1, SWARM_num_td
-       if (tds(i)%n_dim == 1) then
-          write(*, "(A24,2E12.4)") trim(tds(i)%description) // " = ", &
-               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac
-       else
-
-          do i_dim = 1, tds(i)%n_dim
-             write(*, "(A20,I0,A,2E12.4)") trim(tds(i)%description) // "_", &
-                  i_dim, " = ", tds(i)%val(i_dim), &
-                  sqrt(tds(i)%var(i_dim)) * fac
-          end do
-       end if
-    end do
-
-    ! Print other swarm quantities
     ! mean energy
     tmp    = 0.5_dp * UC_elec_mass / UC_elec_volt
     energy = tmp * sum(tds(ix_vel_sq)%val)
@@ -530,6 +517,21 @@ contains
        std = 0
     end if
     write(*, "(A24,2E12.4)") "mu_ExB = ", mu, std
+
+    ! The other swarm parameters
+    do i = 1, SWARM_num_td
+       if (tds(i)%n_dim == 1) then
+          write(*, "(A24,2E12.4)") trim(tds(i)%description) // " = ", &
+               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac
+       else
+
+          do i_dim = 1, tds(i)%n_dim
+             write(*, "(A20,I0,A,2E12.4)") trim(tds(i)%description) // "_", &
+                  i_dim, " = ", tds(i)%val(i_dim), &
+                  sqrt(tds(i)%var(i_dim)) * fac
+          end do
+       end if
+    end do
 
   end subroutine SWARM_print_results
 
