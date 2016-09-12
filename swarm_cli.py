@@ -30,8 +30,10 @@ def get_args():
         ./swarm_cli.py crosssec.txt -gc N2 1.0 -vary E -vlin 1e7 2e7 10''')
     parser.add_argument('cs', type=str,
                         help='File with cross sections')
-    parser.add_argument('-out_file', type=str, default='results.txt',
-                        help='Output file, default is results.txt')
+    parser.add_argument('-of', type=str, default='results.txt',
+                        help='Transport data output file, default is results.txt')
+    parser.add_argument('-sigma', action='store_true',
+                        help='Include standard deviations in output')
     parser.add_argument('-gc', dest='gas_comps', type=str, nargs='+',
                         required=True, metavar='gas frac',
                         help='List of gas names and fractions, '
@@ -196,12 +198,28 @@ if __name__ == '__main__':
         td_names.append(name)
 
     n_cols = len(td_names)
-    td_matrix = np.zeros((n_flds, n_cols))
+
+    if args.sigma:
+        td_matrix = np.zeros((n_flds, 2 * n_cols))
+    else:
+        td_matrix = np.zeros((n_flds, n_cols))
 
     for i, res in enumerate(swarm_data):
         for j, line in enumerate(res.splitlines()):
+            # Format is name = value stddev
+            # line.split()[2] corresponds to 'value'
+            # line.split()[3] corresponds to 'stddev'
             td_matrix[i, j] = line.split()[2]
+            if args.sigma:
+                td_matrix[i, j + n_cols] = line.split()[3]
 
     header = ' '.join(td_names)
-    np.savetxt(args.out_file, td_matrix, fmt=b'%10.3e', header=header)
-    print("Done, results written to: ", args.out_file)
+
+    # Prepend 's' to indicated standard deviations
+    if args.sigma:
+        snames = ['s' + name for name in td_names]
+        header += ' ' + ' '.join(snames)
+
+    np.savetxt(args.of, td_matrix, fmt=b'%10.3e', header=header)
+
+    print("Results written to: ", args.of)
