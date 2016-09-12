@@ -223,6 +223,7 @@ if __name__ == '__main__':
     # Write header manually to support numpy < 1.7
     with open(args.of, 'wb') as f:
         f.write(header.encode('ascii'))
+        f.write('\n'.encode('ascii'))
         np.savetxt(f, td_matrix, fmt=b'%10.3e')
 
     print("Results written to: ", args.of)
