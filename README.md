@@ -20,7 +20,7 @@ e.g. [Petrovic et al. 2005](http://dx.doi.org/10.1088/0022-3727/38/16/032).
 
 People involved:
 
-* Jannis Teunissen: original author jannis@teunissen.net
+* Jannis Teunissen: original author
 * Anbang Sun: testing, fixing bugs, first implementation of magnetic field
 
 ## Requirements
