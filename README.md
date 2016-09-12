@@ -32,7 +32,7 @@ The code has been tested on GNU/Linux and Mac.
 
 ## Getting the code
 
-    git clone https://github.com/jannisteunissen/particle_swarm
+    git clone https://gitlab.com/MD-CWI-NL/particle_swarm
 
 ## Compiling the code
 
@@ -121,7 +121,7 @@ Currently, three particle movers are included, which can be selected with the
   fields because it requires time steps shorter than the gyration time.
 * `analytic`: Update the particle position and velocity analytically. This
   method currently required a non-zero magnetic field, because it computes the
-  **E**x**B** drift velocity.
+  **ExB** drift velocity.
 
 ## A comment on performance
 
@@ -129,7 +129,7 @@ How long a swarm needs to run depends on two factors:
 
 1. The required accuracy: as with most Monte Carlo methods, an `N` times longer
    run gives a `sqrt(N)` times better accuracy.
-2. The relaxation time of electrons. In general, electrons relax slower the
+2. The relaxation time of electrons. In general, electrons relax slower to the
    background field at lower energies.
 
 ## TODO
