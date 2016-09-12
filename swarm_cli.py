@@ -27,7 +27,7 @@ def get_args():
         transport data from swarm simulations.
         Author: Jannis Teunissen, jannis@teunissen.net''',
         epilog='''Example:
-        ./swarm_cli.py crosssec.txt -gc N2 1.0 -vary E -vlin 1e7 2e7 10''')
+        ./swarm_cli.py input/cs_example.txt -gc N2 1.0 -vary E -vlin 1e7 2e7 10''')
     parser.add_argument('cs', type=str,
                         help='File with cross sections')
     parser.add_argument('-of', type=str, default='results.txt',
