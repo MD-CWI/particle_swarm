@@ -213,13 +213,16 @@ if __name__ == '__main__':
             if args.sigma:
                 td_matrix[i, j + n_cols] = line.split()[3]
 
-    header = ' '.join(td_names)
+    header = '# ' + ' '.join(td_names)
 
     # Prepend 's' to indicated standard deviations
     if args.sigma:
         snames = ['s' + name for name in td_names]
         header += ' ' + ' '.join(snames)
 
-    np.savetxt(args.of, td_matrix, fmt=b'%10.3e', header=header)
+    # Write header manually to support numpy < 1.7
+    with open(args.of, 'wb') as f:
+        f.write(header.encode('ascii'))
+        np.savetxt(f, td_matrix, fmt=b'%10.3e')
 
     print("Results written to: ", args.of)
