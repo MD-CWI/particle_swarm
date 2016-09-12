@@ -67,16 +67,16 @@ def get_args():
     parser.add_argument('-np', type=int, default=cpu_count(),
                         help='Number of parallel proccesses')
 
-    parser.add_argument('-en', type=float, nargs=2, default=(1e-3, 0.0),
+    parser.add_argument('-acc_v2', type=float, nargs=2, default=(1e-3, 0.0),
                         metavar=('rel', 'abs'),
-                        help='Required rel./abs. error in energy')
-    parser.add_argument('-mu', type=float, nargs=2, default=(5e-3, 0.0),
+                        help='Required rel./abs. error in velocity squared')
+    parser.add_argument('-acc_v', type=float, nargs=2, default=(5e-3, 0.0),
                         metavar=('rel', 'abs'),
-                        help='Required rel./abs. error in mobility')
-    parser.add_argument('-D', type=float, nargs=2, default=(1e-2, 0.0),
+                        help='Required rel./abs. error in velocity')
+    parser.add_argument('-acc_D', type=float, nargs=2, default=(1e-2, 0.0),
                         metavar=('rel', 'abs'),
                         help='Required rel./abs. error in diff. coeff')
-    parser.add_argument('-a', type=float, nargs=2, default=(5e-3, 10.0),
+    parser.add_argument('-acc_a', type=float, nargs=2, default=(5e-3, 10.0),
                         metavar=('rel', 'abs'),
                         help='Required rel./abs. error in alpha')
     return parser.parse_args()
@@ -92,10 +92,10 @@ def create_swarm_cfg(tmpdir, args):
     f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
     f.write('consecutive_run = T\n')
     f.write('dry_run = F\n')
-    f.write('acc_energy = ' + ' '.join(map(str, args.en)) + '\n')
-    f.write('acc_mobility = ' + ' '.join(map(str, args.mu)) + '\n')
-    f.write('acc_diffusion = ' + ' '.join(map(str, args.D)) + '\n')
-    f.write('acc_alpha = ' + ' '.join(map(str, args.a)) + '\n')
+    f.write('acc_velocity_sq = ' + ' '.join(map(str, args.acc_v2)) + '\n')
+    f.write('acc_velocity = ' + ' '.join(map(str, args.acc_v)) + '\n')
+    f.write('acc_diffusion = ' + ' '.join(map(str, args.acc_D)) + '\n')
+    f.write('acc_alpha = ' + ' '.join(map(str, args.acc_a)) + '\n')
     f.write('electric_field = ' + str(args.E) + '\n')
     f.write('magnetic_field = ' + str(args.B) + '\n')
     f.write('field_angle_degrees = ' + str(args.angle) + '\n')
@@ -123,7 +123,11 @@ def create_var_cfg(tmpdir, index, varname, value):
 
 def pswarm_wrapper(cmd_and_num):
     cmd, num = cmd_and_num
-    res = check_output(cmd)
+    try:
+        res = check_output(cmd)
+    except:
+        print("particle_swarm returned an error")
+        sys.exit(1)
     num.value += 1
     return res
 
@@ -154,7 +158,12 @@ if __name__ == '__main__':
 
         # Perform a dry run of particle_swarm to generate lookup tables for the
         # cross sections
-        check_output(['./particle_swarm', base_cfg, init_cfg])
+        try:
+            check_output(['./particle_swarm', base_cfg, init_cfg])
+        except:
+            print("particle_swarm returned an error")
+            sys.exit(1)
+
         cmd_list = []
 
         pool = Pool(processes=args.np)

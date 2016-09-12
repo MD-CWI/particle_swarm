@@ -71,12 +71,12 @@ module m_config
 contains
 
   subroutine handle_error(err_string)
+    use iso_fortran_env, only: error_unit
     character(len=*), intent(in) :: err_string
 
-    print *, "The following fatal error occured in m_config:"
-    print *, trim(err_string)
-    ! Gnu extension to get a backtrace
-    call abort()
+    write(error_unit, *) "The following fatal error occured in m_config:"
+    write(error_unit, *) trim(err_string)
+    error stop
   end subroutine handle_error
 
   !> Update the variables in the configartion with the values found in 'filename'

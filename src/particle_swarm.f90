@@ -190,10 +190,10 @@ contains
     call CFG_add(cfg, "output_dir", "output", &
          "The output directory (include no trailing slash!)")
 
-    call CFG_add(cfg, "acc_energy", [5.0e-3_dp, 0.0_dp], &
-         "The required rel/abs accuracy of the energy")
-    call CFG_add(cfg, "acc_mobility", [5.0e-3_dp, 0.0_dp], &
-         "The required rel/abs accuracy of the mobility")
+    call CFG_add(cfg, "acc_velocity_sq", [5.0e-3_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the velocity squared")
+    call CFG_add(cfg, "acc_velocity", [5.0e-3_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the velocity")
     call CFG_add(cfg, "acc_diffusion", [1.0e-2_dp, 0.0_dp], &
          "The required rel/abs accuracy of the diffusion coeff.")
     call CFG_add(cfg, "acc_alpha", [5.0e-3_dp, 0.0_dp], &

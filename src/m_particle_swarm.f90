@@ -10,14 +10,18 @@ module m_particle_swarm
   !> magnetic field)
   real(dp), parameter :: SWARM_omega_unitvec(3) = [0.0_dp, 0.0_dp, 1.0_dp]
 
-  integer, parameter :: SWARM_num_td = 5
-  integer, parameter :: ix_energy    = 1
-  integer, parameter :: ix_mobility  = 2
+  ! These are the basic swarm parameters that we measure, but some others that
+  ! can be derived from these (e.g., the mean energy or mobility) are printed as
+  ! well.
+  integer, parameter :: SWARM_num_td = 6
+  integer, parameter :: ix_vel       = 1
+  integer, parameter :: ix_vel_sq    = 2
   integer, parameter :: ix_diffusion = 3
   integer, parameter :: ix_alpha     = 4
   integer, parameter :: ix_eta       = 5
+  integer, parameter :: ix_coll_rate = 6
 
-  !> Type for transport data (such as energy, mobility etc.)
+  !> Type for storing transport data
   type SWARM_td_t
      character(len=20)     :: description    !< Description
      integer               :: n_dim          !< Dimension of td(:)
@@ -37,17 +41,18 @@ module m_particle_swarm
      real(dp) :: Ez           !< Electric field along z-axis (V/m)
      real(dp) :: Ey           !< Electric field along y-axis (V/m)
      real(dp) :: omega_c      !< Gyration frequency
-     real(dp) :: ExB_drift(3) !< E x B drift velocity
+     real(dp) :: ExB_drift(3) !< ExB drift velocity
   end type SWARM_field_t
 
   !> Type to collect particle statistics / properties
   type part_stats_t
      type(SWARM_field_t) :: field     !< The field configuration
      integer             :: n_samples !< Number of samples
+     real(dp)            :: coll_rate !< Collision rate
      real(dp)            :: i_rate    !< Ionization rate
      real(dp)            :: a_rate    !< Attachment rate
      real(dp)            :: v(3)      !< Mean velocity
-     real(dp)            :: v2        !< Mean square velocity
+     real(dp)            :: v2(3)     !< Mean square velocity
      real(dp)            :: cov_xv(3) !< Covariance x,v
   end type part_stats_t
 
@@ -75,20 +80,21 @@ contains
 
     SWARM_field = field
 
-    call init_td(tds(ix_energy), 1, "energy")
-    call init_td(tds(ix_mobility), 3, "mu")
+    call init_td(tds(ix_vel_sq), 3, "vel_sq")
+    call init_td(tds(ix_vel), 3, "vel")
     call init_td(tds(ix_diffusion), 3, "diff")
     call init_td(tds(ix_alpha), 1, "alpha")
     call init_td(tds(ix_eta), 1, "eta")
+    call init_td(tds(ix_coll_rate), 1, "coll_rate")
 
     ! Get accuracy requirements
-    call CFG_get(cfg, "acc_energy", rel_abs_acc)
-    tds(ix_energy)%rel_acc = rel_abs_acc(1)
-    tds(ix_energy)%abs_acc = rel_abs_acc(2)
+    call CFG_get(cfg, "acc_velocity_sq", rel_abs_acc)
+    tds(ix_vel_sq)%rel_acc = rel_abs_acc(1)
+    tds(ix_vel_sq)%abs_acc = rel_abs_acc(2)
 
-    call CFG_get(cfg, "acc_mobility", rel_abs_acc)
-    tds(ix_mobility)%rel_acc = rel_abs_acc(1)
-    tds(ix_mobility)%abs_acc = rel_abs_acc(2)
+    call CFG_get(cfg, "acc_velocity", rel_abs_acc)
+    tds(ix_vel)%rel_acc = rel_abs_acc(1)
+    tds(ix_vel)%abs_acc = rel_abs_acc(2)
 
     call CFG_get(cfg, "acc_diffusion", rel_abs_acc)
     tds(ix_diffusion)%rel_acc = rel_abs_acc(1)
@@ -204,7 +210,7 @@ contains
 
     integer                           :: ix, num_part
     real(dp)                          :: inv_n_samples
-    real(dp)                          :: v(3), v2, corr_fac
+    real(dp)                          :: v(3), v2(3), corr_fac
     real(dp)                          :: coll_rates(PC_max_num_coll)
     type(PC_part_t)                   :: part
 
@@ -227,7 +233,7 @@ contains
        ps%n_samples  = ps%n_samples + 1
        inv_n_samples = 1.0_dp / ps%n_samples
        v             = part%v
-       v2            = sum(v**2)
+       v2            = v**2
        ps%v          = ps%v + (v - ps%v) * inv_n_samples
        ! ps%v2_v       = ps%v2_v + (v2 * v - ps%v2_v) * inv_n_samples
 
@@ -237,7 +243,10 @@ contains
 
        ! ps%cov_v2_xv  = ps%cov_v2_xv + v2 * (v - ps%v) * part%x
        ps%v2         = ps%v2 + (v2 - ps%v2) * inv_n_samples
-       call pc%get_coll_rates(sqrt(v2), coll_rates(1:pc%n_colls))
+
+       call pc%get_coll_rates(norm2(v2), coll_rates(1:pc%n_colls))
+       ps%coll_rate = ps%coll_rate + (sum(coll_rates(1:pc%n_colls)) - &
+            ps%coll_rate) * inv_n_samples
        ps%i_rate = ps%i_rate + (sum(coll_rates(pc%ionization_colls)) - &
             ps%i_rate) * inv_n_samples
        ps%a_rate = ps%a_rate + (sum(coll_rates(pc%attachment_colls)) - &
@@ -250,11 +259,12 @@ contains
     type(SWARM_td_t), intent(inout) :: tds(:)
     type(part_stats_t), intent(in)  :: ps
 
-    call update_td(tds(ix_energy), [0.5 * UC_elec_mass * ps%v2 / UC_elec_volt])
-    call update_td(tds(ix_mobility), ps%v / norm2(SWARM_field%E_vec))
+    call update_td(tds(ix_vel_sq), ps%v2)
+    call update_td(tds(ix_vel), ps%v)
     call update_td(tds(ix_diffusion), ps%cov_xv / ps%n_samples)
     call update_td(tds(ix_alpha), [ps%i_rate / norm2(ps%v)])
     call update_td(tds(ix_eta), [ps%a_rate / norm2(ps%v)])
+    call update_td(tds(ix_coll_rate), [ps%coll_rate])
 
     ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
     ! td(8)     = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
@@ -320,14 +330,15 @@ contains
 
        ! Estimate the time scale for energy relaxation, given by:
        ! energy / (d/dt energy), in units of the collision time.
-       n_coll_times = nint(abs(fac * ps%v2 / &
-            (norm2(SWARM_field%E_vec * ps%v) * tau_coll)))
+       n_coll_times = nint(fac * norm2(ps%v2) / &
+            (norm2(SWARM_field%E_vec * ps%v) * tau_coll))
 
        ! For safety, limit n_coll_times to 10 -- 2000
        n_coll_times = max(10, n_coll_times)
        n_coll_times = min(2000, n_coll_times)
 
-       growth_rate = abs(ps%i_rate - ps%a_rate)
+       growth_rate  = abs(ps%i_rate - ps%a_rate)
+
        do n = 1, n_coll_times
           call swarm_advance(pc, tau_coll, swarm_size, growth_rate)
           call update_particle_stats(pc, ps, n == 1)
@@ -447,9 +458,11 @@ contains
   end subroutine create_swarm
 
   subroutine SWARM_print_results(tds)
+    use m_units_constants
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
     integer                      :: i, i_dim
-    real(dp)                     :: fac
+    real(dp)                     :: fac, tmp, std
+    real(dp) :: energy, mu
 
     i = tds(1)%n_measurements
     fac = sqrt(1.0_dp / (i * (i-1)))
@@ -458,6 +471,7 @@ contains
     write(*, "(A24,2E12.4)") "Ez = ", SWARM_field%Ez, 0.0_dp
     write(*, "(A24,2E12.4)") "Ey = ", SWARM_field%Ey, 0.0_dp
     write(*, "(A24,2E12.4)") "angle = ", SWARM_field%angle_deg, 0.0_dp
+    write(*, "(A24,2E12.4)") "omega_c = ", SWARM_field%omega_c, 0.0_dp
 
     do i = 1, SWARM_num_td
        if (tds(i)%n_dim == 1) then
@@ -472,6 +486,50 @@ contains
           end do
        end if
     end do
+
+    ! Print other swarm quantities
+    ! mean energy
+    tmp    = 0.5_dp * UC_elec_mass / UC_elec_volt
+    energy = tmp * sum(tds(ix_vel_sq)%val)
+    std    = tmp * sqrt(sum(tds(ix_vel_sq)%var)) * fac
+    write(*, "(A24,2E12.4)") "energy = ", energy, std
+
+    ! mobility parallel to E
+    mu = -dot_product(tds(ix_vel)%val,  SWARM_field%E_vec) &
+         / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
+    std = fac * sqrt(dot_product(tds(ix_vel)%var,  SWARM_field%E_vec)) &
+         / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
+    write(*, "(A24,2E12.4)") "mu_E = ", mu, std
+
+    ! mobility parallel to B
+    if (abs(SWARM_field%Ez) > sqrt(epsilon(1.0_dp))) then
+       mu = -tds(ix_vel)%val(3) / SWARM_field%Ez
+       std = fac * sqrt(tds(ix_vel)%var(3)) / abs(SWARM_field%Ez)
+    else
+       mu = 0
+       std = 0
+    end if
+    write(*, "(A24,2E12.4)") "mu_B = ", mu, std
+
+    ! mobility perpendicular to B (y-velocity over Ey)
+    if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp))) then
+       mu = -tds(ix_vel)%val(2) / SWARM_field%Ey
+       std = fac * sqrt(tds(ix_vel)%var(2)) / abs(SWARM_field%Ey)
+    else
+       mu = 0
+       std = 0
+    end if
+    write(*, "(A24,2E12.4)") "mu_xB = ", mu, std
+
+    ! mobility in ExB-direction (x-velocity over Ey = E_perp)
+    if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp))) then
+       mu = tds(ix_vel)%val(1) / SWARM_field%Ey
+       std = fac * sqrt(tds(ix_vel)%var(1)) / abs(SWARM_field%Ey)
+    else
+       mu = 0
+       std = 0
+    end if
+    write(*, "(A24,2E12.4)") "mu_ExB = ", mu, std
 
   end subroutine SWARM_print_results
 
