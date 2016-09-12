@@ -221,6 +221,7 @@ contains
        ps%v         = 0.0_dp
        ps%v2        = 0.0_dp
        ps%cov_xv    = 0.0_dp
+       ps%coll_rate = 0.0_dp
        ps%i_rate    = 0.0_dp
        ps%a_rate    = 0.0_dp
     end if
@@ -244,7 +245,7 @@ contains
        ! ps%cov_v2_xv  = ps%cov_v2_xv + v2 * (v - ps%v) * part%x
        ps%v2         = ps%v2 + (v2 - ps%v2) * inv_n_samples
 
-       call pc%get_coll_rates(norm2(v2), coll_rates(1:pc%n_colls))
+       call pc%get_coll_rates(sqrt(sum(v2)), coll_rates(1:pc%n_colls))
        ps%coll_rate = ps%coll_rate + (sum(coll_rates(1:pc%n_colls)) - &
             ps%coll_rate) * inv_n_samples
        ps%i_rate = ps%i_rate + (sum(coll_rates(pc%ionization_colls)) - &
@@ -331,8 +332,8 @@ contains
 
        ! Estimate the time scale for energy relaxation, given by:
        ! energy / (d/dt energy), in units of the collision time.
-       n_coll_times = nint(fac * norm2(ps%v2) / &
-            (norm2(SWARM_field%E_vec * ps%v) * tau_coll))
+       n_coll_times = nint(fac * sum(ps%v2) / &
+            abs(dot_product(SWARM_field%E_vec, ps%v) * tau_coll))
 
        ! For safety, limit n_coll_times to 10 -- 2000
        n_coll_times = max(10, n_coll_times)
