@@ -47,7 +47,7 @@ To see command the line options and their documentation, use:
 
 An example of an invocation:
 
-    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -vary E -vlin 1e7 2e7 10
+    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e7 2e7 -E_num 10
 
 The last command uses cross sections from the file `input/cs_example.txt`,
 stores results in `test.txt` and performs swarm simulations in pure nitrogen
@@ -57,14 +57,11 @@ V/m` and `2e7 V/m`.
 Some of the important options:
 
 * Select particle mover: `-mover {analytic,boris,verlet}`
-  `analytic`
-* Specify electric field (in V/m): `-E <number>`
-* Specify magnetic field (in Tesla): `-B <number>`
-* Specify angle between E and B (in degrees): `-angle <number>`
-* Select quantity to vary: `-vary {E,B,angle}`
-* Vary linearly: `-vlin min max N`
-* Vary logarithmically: `-vlog min max N`
-* Vary over list: `-vlist <list of values>`
+* Electric field range (in V/m): `-E_range min max`
+* Number of electric fields: `-E_num number`
+* How to vary electric fields: `-E_vary {lin,log}`
+* Similar options for the magnetic field (in Tesla): `-B_range`, `-B_num`, `-B_vary`
+* Similar options for angle between E and B (in degrees): `-angle_range`, `-angle_num`, `-angle_vary`
 
 ## Without the command line interface
 
@@ -134,7 +131,6 @@ How long a swarm needs to run depends on two factors:
 
 ## TODO
 
-* Support zero magnetic field in analytic mover
 * Perform comparison with other solvers
 * Include measurement of 'bulk' transport data
 * Think of smart way to use individual particle trajectories
