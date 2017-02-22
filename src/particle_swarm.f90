@@ -38,7 +38,7 @@ contains
     integer                        :: nn, tbl_size, max_num_part
     integer                        :: swarm_size, n_gas_comp, n_gas_frac
     real(dp)                       :: pressure, temperature, max_ev
-    real(dp)                       :: magnetic_field, tmp
+    real(dp)                       :: magnetic_field, electric_field, tmp
     character(len=200)             :: cs_file, output_dir
     character(len=200)             :: cfg_name, prev_name, tmp_name
     character(len=20)              :: particle_mover
@@ -147,13 +147,17 @@ contains
 
     call CFG_get(cfg, "particle_mover", particle_mover)
     call CFG_get(cfg, "magnetic_field", magnetic_field)
+    call CFG_get(cfg, "electric_field", electric_field)
     call CFG_get(cfg, "dry_run", dry_run)
 
     select case (trim(particle_mover))
     case ("analytic")
-       pc%particle_mover => SWARM_particle_mover_analytic
-       if (.not. dry_run .and. abs(magnetic_field) < epsilon(1.0_dp)) &
-            stop "Analytic particle mover can only be used for |B| > 0"
+       if (electric_field > 10.0_dp * field%Bz * UC_lightspeed) then
+         ! Negligible B-field, use simplified approximation
+         pc%particle_mover => SWARM_particle_mover_simple
+       else
+         pc%particle_mover => SWARM_particle_mover_analytic
+       end if
     case ("boris")
        pc%particle_mover => SWARM_particle_mover_boris
        ! Limit time step to boris_dt_factor / cyclotron freq.
@@ -242,11 +246,6 @@ contains
     call CFG_get(cfg, "magnetic_field", field%Bz)
     call CFG_get(cfg, "electric_field", electric_field)
     call CFG_get(cfg, "field_angle_degrees", degrees)
-
-    if (field%Bz > 0 .and. electric_field > &
-         0.1_dp * field%Bz * UC_lightspeed) then
-       print *, "Warning: B non-zero but E/B > 10% of speed of light"
-    end if
 
     field%angle_deg = degrees
     field%Ez        = electric_field * cos(UC_pi * degrees / 180)

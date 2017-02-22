@@ -67,6 +67,7 @@ module m_particle_swarm
   public :: SWARM_get_data
   public :: SWARM_print_results
   public :: SWARM_particle_mover_analytic
+  public :: SWARM_particle_mover_simple
   public :: SWARM_particle_mover_boris
 
 contains
@@ -544,6 +545,9 @@ contains
     real(dp), intent(in)           :: dt
     real(dp)                       :: rc(3), rc_rot(3), theta
 
+    ! Determine rotation angle
+    theta = dt * SWARM_field%omega_c
+
     ! First the motion perpendicular to the magnetic field
 
     ! Subtract the plasma drift velocity
@@ -552,8 +556,6 @@ contains
     ! Determine rc, the vector pointing from the center of gyration
     rc = cross_product(part%v, SWARM_omega_unitvec) / SWARM_field%omega_c
 
-    ! Determine rotation angle
-    theta = dt * SWARM_field%omega_c
 
     ! Rotate position and velocity
     part%v = rotate_around_axis(part%v, SWARM_omega_unitvec, theta)
@@ -573,6 +575,29 @@ contains
     ! Update time left
     part%t_left = part%t_left - dt
   end subroutine SWARM_particle_mover_analytic
+
+  !> Advance the particle position and velocity over time dt taking into account
+  !> a constant electric and magnetic field, using the analytic solution.
+  subroutine SWARM_particle_mover_simple(part, dt)
+    use m_units_constants
+    type(PC_part_t), intent(inout) :: part
+    real(dp), intent(in)           :: dt
+    real(dp)                       :: a(3)
+
+    ! Use simple approximation based on Lorentz force
+    a = UC_elec_q_over_m * (SWARM_field%E_vec + &
+         cross_product(part%v, SWARM_field%B_vec))
+
+    part%v = part%v + 0.5_dp * dt * a
+    part%x = part%x + dt * part%v
+
+    a = UC_elec_q_over_m * (SWARM_field%E_vec + &
+         cross_product(part%v, SWARM_field%B_vec))
+    part%v = part%v + 0.5_dp * dt * a
+
+    ! Update time left
+    part%t_left = part%t_left - dt
+  end subroutine SWARM_particle_mover_simple
 
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant electric and magnetic field, using Boris' method.
