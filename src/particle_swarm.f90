@@ -152,11 +152,11 @@ contains
 
     select case (trim(particle_mover))
     case ("analytic")
-       if (electric_field > 10.0_dp * field%Bz * UC_lightspeed) then
-         ! Negligible B-field, use simplified approximation
-         pc%particle_mover => SWARM_particle_mover_simple
+       if (electric_field > 10.0_dp * magnetic_field * UC_lightspeed) then
+          ! Negligible B-field, use simplified approximation
+          pc%particle_mover => SWARM_particle_mover_simple
        else
-         pc%particle_mover => SWARM_particle_mover_analytic
+          pc%particle_mover => SWARM_particle_mover_analytic
        end if
     case ("boris")
        pc%particle_mover => SWARM_particle_mover_boris
