@@ -67,7 +67,7 @@ def get_args():
                         metavar='temperature', help='Gas temperature (K)')
     parser.add_argument('-p', type=float, default=1.0,
                         metavar='pressure', help='Gas pressure (bar)')
-    parser.add_argument('-np', type=int, default=cpu_count()//2,
+    parser.add_argument('-np', type=int, default=max(1, cpu_count()//2),
                         help='Number of parallel proccesses')
 
     parser.add_argument('-acc_v2', type=float, nargs=2, default=(1e-3, 0.0),
