@@ -23,6 +23,7 @@ from subprocess import check_output
 def get_args():
     # Get and parse the command line arguments
     parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description='''Command line interface to compute electron
         transport data from swarm simulations.
         Author: Jannis Teunissen, jannis@teunissen.net''',
@@ -31,7 +32,7 @@ def get_args():
     parser.add_argument('cs', type=str,
                         help='File with cross sections')
     parser.add_argument('-of', type=str, default='results.txt',
-                        help='Transport data output file, default is results.txt')
+                        help='Transport data output file')
     parser.add_argument('-sigma', action='store_true',
                         help='Include standard deviations in output')
     parser.add_argument('-gc', dest='gas_comps', type=str, nargs='+',
@@ -49,14 +50,14 @@ def get_args():
     parser.add_argument('-E_num', type=int, default=1,
                         help='Number of electric fields')
 
-    parser.add_argument('-angle_range', nargs=2, type=float, default=[45., 45.],
+    parser.add_argument('-angle_range', nargs=2, type=float, default=[0., 0.],
                         help='Angle range (degrees)')
     parser.add_argument('-angle_vary', type=str, choices=['lin', 'log'],
                         default='lin', help='How to vary angle')
     parser.add_argument('-angle_num', type=int, default=1,
                         help='Number of angles')
 
-    parser.add_argument('-B_range', nargs=2, type=float, default=[10., 10.],
+    parser.add_argument('-B_range', nargs=2, type=float, default=[0., 0.],
                         help='Magnetic field range (T)')
     parser.add_argument('-B_vary', type=str, choices=['lin', 'log'],
                         default='lin', help='How to vary magnetic field')

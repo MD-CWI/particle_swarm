@@ -63,7 +63,38 @@ Some of the important options:
 * Similar options for the magnetic field (in Tesla): `-B_range`, `-B_num`, `-B_vary`
 * Similar options for angle between E and B (in degrees): `-angle_range`, `-angle_num`, `-angle_vary`
 
-## Without the command line interface
+Note that by default `E_num = 1`, `B_num = 1`, and `angle_num = 1`.
+
+## More examples
+
+Compute transport coefficients between `E = 1e6 V/m` and `E = 2e7 V/m`, using a
+logarithmic spacing with 20 points:
+
+    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e6 2e7
+        -E_num 20 -E_vary log
+
+Compute transport coefficients in an electric field between `1e7 V/m` and `2e7
+V/m`, for a magnetic field of `20 T` and `E,B`-angles between 5 and 85 degrees.
+Use linearly spaced electric field and angles (the default), with 10 points:
+
+    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e7 2e7
+        -E_num 10 -B_range 20 20 -angle_range 5 85 -angle_num 10
+
+
+Compute transport coefficients in an electric field between `1e7 V/m` and `2e7
+V/m`, for a perpendicular magnetic field between `5 T` and `20 T`, using
+linearly spaced electric and magnetic fields (the default) with 10 points:
+
+    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e7 2e7
+        -E_num 10 -angle_range 90 90 -B_range 5 20 -B_num 10
+
+## Converting tables
+
+The resulting table with transport data can be converted to a format that is
+perhaps more useful in a discharge simulation with the conversion scripts in the
+`tools` directory.
+
+## Usage without the command line interface
 
     # Compute transport data with the settings from config.txt
     ./particle_swarm config.txt
@@ -116,9 +147,7 @@ Currently, three particle movers are included, which can be selected with the
 * `boris`: Use Boris' method to push particles. Can be used for arbitrary
   electric and magnetic fields. The method slows down for very high magnetic
   fields because it requires time steps shorter than the gyration time.
-* `analytic`: Update the particle position and velocity analytically. This
-  method currently required a non-zero magnetic field, because it computes the
-  **ExB** drift velocity.
+* `analytic`: Update the particle position and velocity analytically.
 
 ## A comment on performance
 
