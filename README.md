@@ -54,39 +54,50 @@ stores results in `test.txt` and performs swarm simulations in pure nitrogen
 (N2) for 10 electric fields. The fields are linearly interpolated between `1e7
 V/m` and `2e7 V/m`.
 
-Some of the important options:
+A run can use a single electric field or a range of values, specified in `V/m`,
+for example as:
 
-* Select particle mover: `-mover {analytic,boris,verlet}`
-* Electric field range (in V/m): `-E_range min max`
-* Number of electric fields: `-E_num number`
-* How to vary electric fields: `-E_vary {lin,log}`
-* Similar options for the magnetic field (in Tesla): `-B_range`, `-B_num`, `-B_vary`
-* Similar options for angle between E and B (in degrees): `-angle_range`, `-angle_num`, `-angle_vary`
+    -E 1e7
+    -E_range 1e7 2e7 -E_num 10
 
-Note that by default `E_num = 1`, `B_num = 1`, and `angle_num = 1`.
+For a range of values, the spacing can be specified as `-E_vary lin` (linear,
+the default) or `-E_vary log` (logarithmic). Similarly, a single magnetic field
+or a range of magnetic fields can be specified in Tesla, using for example:
+
+    -B 10
+    -B_range 10 20 -B_num 10
+
+By default, the magnetic field is zero. Finally, the angle (in degrees) between
+the electric and magnetic can be varied:
+
+    -angle 90
+    -angle_range 10 80 -angle_num 5
+
+By default, the electric and magnetic field are parallel. For the magnetic field
+and angle, the spacing can be specified similarly as for the electric field,
+with `-B_vary` and `-angle_vary`.
+
+Three different particle movers have been implemented, which can be selected
+using `-mover {analytic,boris,verlet}`.
 
 ## More examples
 
 Compute transport coefficients between `E = 1e6 V/m` and `E = 2e7 V/m`, using a
 logarithmic spacing with 20 points:
 
-    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e6 2e7
-        -E_num 20 -E_vary log
+    ./swarm_cli.py input/cs_example.txt -gc N2 1.0 -E_range 1e6 2e7 -E_num 20 -E_vary log
 
 Compute transport coefficients in an electric field between `1e7 V/m` and `2e7
 V/m`, for a magnetic field of `20 T` and `E,B`-angles between 5 and 85 degrees.
 Use linearly spaced electric field and angles (the default), with 10 points:
 
-    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e7 2e7
-        -E_num 10 -B_range 20 20 -angle_range 5 85 -angle_num 10
-
+    ./swarm_cli.py input/cs_example.txt -gc N2 1.0 -E_range 1e7 2e7 -E_num 10 -B 20 -angle_range 5 85 -angle_num 10
 
 Compute transport coefficients in an electric field between `1e7 V/m` and `2e7
 V/m`, for a perpendicular magnetic field between `5 T` and `20 T`, using
 linearly spaced electric and magnetic fields (the default) with 10 points:
 
-    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e7 2e7
-        -E_num 10 -angle_range 90 90 -B_range 5 20 -B_num 10
+    ./swarm_cli.py input/cs_example.txt -gc N2 1.0 -E_range 1e7 2e7 -E_num 10 -angle 90 -B_range 5 20 -B_num 10
 
 ## Converting tables
 

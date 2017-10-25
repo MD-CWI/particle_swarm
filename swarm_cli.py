@@ -17,7 +17,7 @@ import sys
 import math
 import numpy as np
 from multiprocessing import Pool, Manager, cpu_count
-from subprocess import check_output
+from subprocess import check_output, CalledProcessError
 
 
 def get_args():
@@ -43,21 +43,30 @@ def get_args():
                         choices=['analytic', 'boris', 'verlet'],
                         default='analytic', help='Choice of particle mover')
 
-    parser.add_argument('-E_range', nargs=2, type=float, default=[1e7, 1e7],
-                        help='Electric field range (V/m)')
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument('-E', type=float,
+                        help='Electric field value (V/m)')
+    g.add_argument('-E_range', nargs=2, type=float, default=[1e7, 1e7],
+                        help='min/max electric field (V/m)')
     parser.add_argument('-E_vary', type=str, choices=['lin', 'log'],
                         default='lin', help='How to vary electric field')
     parser.add_argument('-E_num', type=int, default=1,
                         help='Number of electric fields')
 
-    parser.add_argument('-angle_range', nargs=2, type=float, default=[0., 0.],
-                        help='Angle range (degrees)')
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument('-angle', type=float,
+                        help='min/max angle (degrees)')
+    g.add_argument('-angle_range', nargs=2, type=float, default=[0., 0.],
+                        help='min/max angle (degrees)')
     parser.add_argument('-angle_vary', type=str, choices=['lin', 'log'],
                         default='lin', help='How to vary angle')
     parser.add_argument('-angle_num', type=int, default=1,
                         help='Number of angles')
 
-    parser.add_argument('-B_range', nargs=2, type=float, default=[0., 0.],
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument('-B', type=float,
+                        help='Magnetic field range (T)')
+    g.add_argument('-B_range', nargs=2, type=float, default=[0., 0.],
                         help='Magnetic field range (T)')
     parser.add_argument('-B_vary', type=str, choices=['lin', 'log'],
                         default='lin', help='How to vary magnetic field')
@@ -168,6 +177,17 @@ def print_swarm_info(args, E_list, B_list, angle_list):
 if __name__ == '__main__':
     args = get_args()
 
+    # Set ranges if a scalar argument was given
+    if args.E is not None:
+        args.E_range = [args.E, args.E]
+        args.E_num = 1
+    if args.B is not None:
+        args.B_range = [args.B, args.B]
+        args.B_num = 1
+    if args.angle is not None:
+        args.angle_range = [args.angle, args.angle]
+        args.angle_num = 1
+
     # Generate lists of E, angle and B values
     n_runs = args.E_num * args.angle_num * args.B_num
     if args.E_vary == 'lin':
@@ -200,9 +220,10 @@ if __name__ == '__main__':
         # Perform a dry run of particle_swarm to generate lookup tables for the
         # cross sections
         try:
-            check_output(['./particle_swarm', base_cfg, init_cfg])
-        except:
+            out = check_output(['./particle_swarm', base_cfg, init_cfg])
+        except CalledProcessError, e:
             print("particle_swarm returned an error")
+            print(e.output)
             sys.exit(1)
 
         with open(tmpdir + '/swarm_cli_cs_summary.txt') as f:
