@@ -55,7 +55,7 @@ def get_args():
 
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-angle', type=float,
-                        help='min/max angle (degrees)')
+                        help='angle between E and B (degrees)')
     g.add_argument('-angle_range', nargs=2, type=float, default=[0., 0.],
                         help='min/max angle (degrees)')
     parser.add_argument('-angle_vary', type=str, choices=['lin', 'log'],
@@ -65,9 +65,9 @@ def get_args():
 
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-B', type=float,
-                        help='Magnetic field range (T)')
+                        help='Magnetic field (T)')
     g.add_argument('-B_range', nargs=2, type=float, default=[0., 0.],
-                        help='Magnetic field range (T)')
+                        help='min/max magnetic field (T)')
     parser.add_argument('-B_vary', type=str, choices=['lin', 'log'],
                         default='lin', help='How to vary magnetic field')
     parser.add_argument('-B_num', type=int, default=1,
