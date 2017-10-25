@@ -144,6 +144,27 @@ def progress_bar(pct):
     sys.stdout.flush()
 
 
+def print_swarm_info(args, E_list, B_list, angle_list):
+    print(" Starting particle swarm simulation")
+    print("----------------------------------------")
+    print(" Cross section file : {}".format(args.cs))
+    print(" Gas components     : {}".format(' '.join(args.gas_comps[0::2])))
+    print(" Gas fractions      : {}".format(' '.join(args.gas_comps[1::2])))
+    print(" Temperature (K)    : {}".format(args.T))
+    print(" Pressure (bar)     : {}".format(args.p))
+    print(" Particle mover     : {}".format(args.mover))
+    print(" Output file        : {}".format(args.of))
+    print(" Number of CPUs     : {}".format(args.np))
+    print("----------------------------------------")
+    Evals = ["{:.2E}".format(val) for val in E_list]
+    Bvals = ["{:.2E}".format(val) for val in B_list]
+    Avals = ["{:.2E}".format(val) for val in angle_list]
+    print(" Electric fields (V/m) : {}".format(' '.join(Evals)))
+    print(" Magnetic fields (T)   : {}".format(' '.join(Bvals)))
+    print(" Angles (degrees)      : {}".format(' '.join(Avals)))
+    print("----------------------------------------")
+
+
 if __name__ == '__main__':
     args = get_args()
 
@@ -167,6 +188,8 @@ if __name__ == '__main__':
     elif args.B_vary == 'log':
         B_list = np.logspace(math.log10(args.B_range[0]),
                              math.log10(args.B_range[1]), args.B_num)
+
+    print_swarm_info(args, E_list, B_list, angle_list)
 
     try:
         tmpdir = tempfile.mkdtemp(dir=os.getcwd())
