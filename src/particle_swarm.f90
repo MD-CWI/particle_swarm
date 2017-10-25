@@ -72,7 +72,7 @@ contains
     call CFG_get_size(cfg, "gas_components", n_gas_comp)
     call CFG_get_size(cfg, "gas_fractions", n_gas_frac)
     if (n_gas_comp /= n_gas_frac) &
-         print *, "gas_components and gas_component_fracs have unequal size"
+         error stop "gas_components and gas_component_fracs have unequal size"
     allocate(gas_names(n_gas_comp))
     allocate(gas_fracs(n_gas_comp))
 
@@ -166,7 +166,7 @@ contains
     case ("verlet")
        pc%particle_mover => PC_verlet_advance
     case default
-       stop "Incorrect particle mover selected"
+       error stop "Incorrect particle mover selected"
     end select
 
   end subroutine initialize_all

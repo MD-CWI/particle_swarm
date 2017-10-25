@@ -47,8 +47,7 @@ contains
     GAS_comp_fracs  = comp_fracs
 
     if (abs(sum(GAS_comp_fracs) - 1) > err_threshold) then
-       print *, "Gas comps are not normalized: ", comp_fracs
-       stop
+       error stop "Gas components are not normalized"
     end if
 
     ! Ideal gas law, pressure is in bar
@@ -69,7 +68,7 @@ contains
 
     print *, "GAS_get_fraction: " // comp_name // " not found"
     GAS_get_fraction = 0.0_dp
-    stop
+    error stop "GAS_get_fraction: component not found"
   end function GAS_get_fraction
 
 end module m_gas
