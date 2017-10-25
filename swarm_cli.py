@@ -145,23 +145,23 @@ def progress_bar(pct):
 
 
 def print_swarm_info(args, E_list, B_list, angle_list):
-    print(" Starting particle swarm simulation")
+    print("Starting particle swarm simulation")
     print("----------------------------------------")
-    print(" Cross section file : {}".format(args.cs))
-    print(" Gas components     : {}".format(' '.join(args.gas_comps[0::2])))
-    print(" Gas fractions      : {}".format(' '.join(args.gas_comps[1::2])))
-    print(" Temperature (K)    : {}".format(args.T))
-    print(" Pressure (bar)     : {}".format(args.p))
-    print(" Particle mover     : {}".format(args.mover))
-    print(" Output file        : {}".format(args.of))
-    print(" Number of CPUs     : {}".format(args.np))
+    print("Cross section file : {}".format(args.cs))
+    print("Gas components     : {}".format(' '.join(args.gas_comps[0::2])))
+    print("Gas fractions      : {}".format(' '.join(args.gas_comps[1::2])))
+    print("Temperature (K)    : {}".format(args.T))
+    print("Pressure (bar)     : {}".format(args.p))
+    print("Particle mover     : {}".format(args.mover))
+    print("Output file        : {}".format(args.of))
+    print("Number of CPUs     : {}".format(args.np))
     print("----------------------------------------")
     Evals = ["{:.2E}".format(val) for val in E_list]
     Bvals = ["{:.2E}".format(val) for val in B_list]
     Avals = ["{:.2E}".format(val) for val in angle_list]
-    print(" Electric fields (V/m) : {}".format(' '.join(Evals)))
-    print(" Magnetic fields (T)   : {}".format(' '.join(Bvals)))
-    print(" Angles (degrees)      : {}".format(' '.join(Avals)))
+    print("Electric fields (V/m) : {}".format(' '.join(Evals)))
+    print("Magnetic fields (T)   : {}".format(' '.join(Bvals)))
+    print("Angles (degrees)      : {}".format(' '.join(Avals)))
     print("----------------------------------------")
 
 
@@ -204,6 +204,11 @@ if __name__ == '__main__':
         except:
             print("particle_swarm returned an error")
             sys.exit(1)
+
+        with open(tmpdir + '/swarm_cli_cs_summary.txt') as f:
+            cs_info = f.read()
+            print(cs_info.rstrip())
+            print("------------------------------------------------------")
 
         cmd_list = []
 
