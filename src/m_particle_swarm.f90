@@ -362,7 +362,7 @@ contains
 
     if (n_swarms == n_swarms_max + 1) then
        write(error_unit, *) "No convergence in ", n_swarms_max, "iterations"
-       error stop
+       error stop "No convergence"
     end if
 
   end subroutine SWARM_get_data
