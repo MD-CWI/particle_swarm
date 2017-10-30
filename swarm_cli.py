@@ -221,7 +221,7 @@ if __name__ == '__main__':
         # cross sections
         try:
             out = check_output(['./particle_swarm', base_cfg, init_cfg])
-        except CalledProcessError, e:
+        except CalledProcessError as e:
             print("particle_swarm returned an error")
             print(e.output)
             sys.exit(1)
