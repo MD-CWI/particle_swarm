@@ -288,8 +288,23 @@ if __name__ == '__main__':
 
     # Write header manually to support numpy < 1.7
     with open(args.of, 'wb') as f:
-        f.write(header.encode('ascii'))
-        f.write('\n'.encode('ascii'))
+        hdr = ''
+        hdr += '# gas components = {}\n'.format(' '.join(args.gas_comps))
+        hdr += '# temperature (Kelvin) = {}\n'.format(args.T)
+        hdr += '# pressure (bar) = {}\n'.format(args.p)
+        hdr += '# cross sections = {}\n'.format(args.cs)
+        hdr += '# E_range = {} {}\n'.format(
+            args.E_range[0], args.E_range[1])
+        hdr += '# B_range = {} {}\n'.format(
+            args.B_range[0], args.B_range[1])
+        hdr += '# angle_range = {} {}\n'.format(
+            args.angle_range[0], args.angle_range[1])
+        hdr += '# E_num = {}\n'.format(args.E_num)
+        hdr += '# B_num = {}\n'.format(args.B_num)
+        hdr += '# angle_num = {}\n'.format(args.angle_num)
+        hdr += '# --- column names ---\n'
+        hdr += header + '\n'
+        f.write(hdr.encode('ascii'))
         np.savetxt(f, td_matrix, fmt=b'%10.3e')
 
     print("Results written to: ", args.of)
