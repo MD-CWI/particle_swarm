@@ -125,28 +125,27 @@ cross sections can directly be used.
 The first line of the output is a header with the names of the columns, below
 which there is a matrix of values. This matrix contains the following columns:
 
-1. `Bz`: magnetic field (Tesla)
-2. `Ez`: z-component of electric field (V/m)
-3. `Ey`: y-component of electric field (V/m)
-4. `angle`: angle between **E** and **B** in degrees
-5. `omega_c`: gyration frequency (rad/s)
-6. `energy`: mean energy (eV)
-7. `mu_E`: mobility parallel to **E** (m2/Vs)
-8. `mu_B`: mobility parallel to **B** (m2/Vs)
-9. `mu_xB`: mobility perpendicular to **B** (m2/Vs)
-10. `mu_ExB`: mobility in **ExB**-direction (m2/Vs) (the **ExB**-velocity over `Ey`)
-11. `alpha`: ionization coefficient (1/m)
-12. `eta`: attachment coefficient (1/m)
-13. `coll_rate`: actual collision rate (1/s)
-14. `diff_1`: x-component of diagonal diffusion coefficient (m2/s)
-15. `diff_2`: y-component
-16. `diff_3`: z-component
-17. `vel_1`: x-component of mean velocity (m/s)
-18. `vel_2`: y-component
-19. `vel_3`: z-component
-20. `vel_sq_1`: x-component of mean squared velocity
-21. `vel_sq_2`: y-component
-22. `vel_sq_3`: z-component
+1. `E`: electric field (V/m)
+2. `B`: magnetic field (Tesla)
+3. `angle`: angle between **E** and **B** in degrees. `B` always points in the z-direction, and `E` lies in the y,z-plane, so that `Ez = cos(angle) * E` and `Ey = sin(angle) * E`
+4. `omega_c`: gyration frequency (rad/s)
+5. `energy`: mean energy (eV)
+6. `mu_E`: mobility parallel to **E** (m2/Vs)
+7. `mu_B`: mobility parallel to **B** (m2/Vs)
+8. `mu_xB`: mobility perpendicular to **B** (m2/Vs)
+9. `mu_ExB`: mobility in **ExB**-direction (m2/Vs) (the **ExB**-velocity over `Ey`)
+10. `alpha`: ionization coefficient (1/m)
+11. `eta`: attachment coefficient (1/m)
+12. `coll_rate`: actual collision rate (1/s)
+13. `diff_1`: x-component of diagonal diffusion coefficient (m2/s)
+14. `diff_2`: y-component
+15. `diff_3`: z-component
+16. `vel_1`: x-component of mean velocity (m/s)
+17. `vel_2`: y-component
+18. `vel_3`: z-component
+19. `vel_sq_1`: x-component of mean squared velocity
+20. `vel_sq_2`: y-component
+21. `vel_sq_3`: z-component
 
 ## Which particle mover to use
 

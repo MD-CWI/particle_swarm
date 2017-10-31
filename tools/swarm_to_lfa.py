@@ -45,7 +45,7 @@ def write_col(varname, name, multicol=False):
     for i in range(n_fields):
         if multicol:
             ix = i*n_angles
-            fld = (td[ix, ix_Ey]**2 + td[ix, ix_Ez]**2)**0.5
+            fld = td[ix, ix_E]
             vals = ["{:.4E}".format(val) for val in td[ix:ix+n_angles, ix_col]]
             print("{:.4E} {}".format(fld, ' '.join(vals)))
         else:
@@ -60,33 +60,35 @@ if __name__ == '__main__':
     args = get_args()
 
     # Read header
-    hdr = args.in_file.readline()
-
-    # Strip comment and newline
-    hdr = hdr[2:].strip()
-    colnames = hdr.split(' ')
+    while True:
+        hdr = args.in_file.readline()
+        if hdr.startswith('# Column names:'):
+            hdr = args.in_file.readline()
+            # Strip comment and newline
+            hdr = hdr[2:].strip()
+            colnames = hdr.split(' ')
+            break
 
     # Read data
     td = np.loadtxt(args.in_file)
 
-    ix_Ey = colnames.index('Ey')
-    ix_Ez = colnames.index('Ez')
+    ix_E = colnames.index('E')
     ix_angle = colnames.index('angle')
     angles = np.unique(td[:, ix_angle])
     n_fields = td.shape[0] // len(angles)
     n_angles = len(angles)
 
     # There should only be one magnetic field
-    ix_Bz = colnames.index('Bz')
+    ix_B = colnames.index('B')
 
     if not args.magnetic:
-        if not np.allclose(td[:, ix_Bz], 0.0):
+        if not np.allclose(td[:, ix_B], 0.0):
             sys.exit("Error: non-zero B-field present (try -magnetic)")
         if not np.allclose(td[:, ix_angle], 0.0):
             sys.exit("Error: non-zero angle between E,B was used (try -magnetic)")
         if n_angles > 1:
             sys.exit("Error: multiple angles used (try -magnetic)")
-    elif not np.allclose(td[:, ix_Bz], td[0, ix_Bz]):
+    elif not np.allclose(td[:, ix_B], td[0, ix_B]):
             sys.exit("Error: more than one B-field present. "
                      "This script works for varying angles.")
 

@@ -471,9 +471,8 @@ contains
     i = tds(1)%n_measurements
     fac = sqrt(1.0_dp / (i * (i-1)))
 
-    write(*, "(A24,2E12.4)") "Bz = ", SWARM_field%Bz, 0.0_dp
-    write(*, "(A24,2E12.4)") "Ez = ", SWARM_field%Ez, 0.0_dp
-    write(*, "(A24,2E12.4)") "Ey = ", SWARM_field%Ey, 0.0_dp
+    write(*, "(A24,2E12.4)") "E = ", norm2(SWARM_field%E_vec), 0.0_dp
+    write(*, "(A24,2E12.4)") "B = ", SWARM_field%Bz, 0.0_dp
     write(*, "(A24,2E12.4)") "angle = ", SWARM_field%angle_deg, 0.0_dp
     write(*, "(A24,2E12.4)") "omega_c = ", SWARM_field%omega_c, 0.0_dp
 
