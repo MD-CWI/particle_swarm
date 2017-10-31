@@ -74,8 +74,8 @@ the electric and magnetic can be varied:
     -angle_range 10 80 -angle_num 5
 
 By default, the electric and magnetic field are parallel. For the magnetic field
-and angle, the spacing can be specified similarly as for the electric field,
-with `-B_vary` and `-angle_vary`.
+and, the spacing can be specified similarly as for the electric field,
+with `-B_vary`.
 
 Three different particle movers have been implemented, which can be selected
 using `-mover {analytic,boris,verlet}`.

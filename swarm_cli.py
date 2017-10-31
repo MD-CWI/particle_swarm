@@ -58,8 +58,6 @@ def get_args():
                         help='angle between E and B (degrees)')
     g.add_argument('-angle_range', nargs=2, type=float, default=[0., 0.],
                         help='min/max angle (degrees)')
-    parser.add_argument('-angle_vary', type=str, choices=['lin', 'log'],
-                        default='lin', help='How to vary angle')
     parser.add_argument('-angle_num', type=int, default=1,
                         help='Number of angles')
 
@@ -153,6 +151,31 @@ def progress_bar(pct):
     sys.stdout.flush()
 
 
+# Adjust mobilities for fields in which they are undefined (because of division
+# by zero), by linearly extrapolating from the nearest values
+def fix_mobilities(tbl, names, E_num, B_num, angle_list):
+    eps = 1e-5
+    angles = map(float, angle_list)
+    angle_num = len(angles)
+    i_muB = names.index('mu_B')
+    i_muxB = names.index('mu_xB')
+    i_muExB = names.index('mu_ExB')
+
+    if min(angles) < eps:
+        for n in range(B_num * E_num):
+            data = tbl[n*angle_num:(n+1)*angle_num, :]
+            data[0, i_muxB] = 2 * data[1, i_muxB] - data[2, i_muxB]
+            data[0, i_muExB] = 2 * data[1, i_muExB] - data[2, i_muExB]
+            tbl[n*angle_num:(n+1)*angle_num, :] = data
+
+    if max(angles) > 90.0 - eps:
+        for n in range(B_num * E_num):
+            data = tbl[n*angle_num:(n+1)*angle_num, :]
+            data[angle_num-1, i_muB] = 2 * data[angle_num-2, i_muB] -\
+                data[angle_num-3, i_muB]
+            tbl[n*angle_num:(n+1)*angle_num, :] = data
+
+
 def print_swarm_info(args, E_list, B_list, angle_list):
     print("Starting particle swarm simulation")
     print("----------------------------------------")
@@ -196,12 +219,8 @@ if __name__ == '__main__':
         E_list = np.logspace(math.log10(args.E_range[0]),
                              math.log10(args.E_range[1]), args.E_num)
 
-    if args.angle_vary == 'lin':
-        angle_list = np.linspace(args.angle_range[0], args.angle_range[1],
-                                 args.angle_num)
-    elif args.angle_vary == 'log':
-        angle_list = np.logspace(math.log10(args.angle_range[0]),
-                             math.log10(args.angle_range[1]), args.angle_num)
+    angle_list = np.linspace(args.angle_range[0], args.angle_range[1],
+                             args.angle_num)
 
     if args.B_vary == 'lin':
         B_list = np.linspace(args.B_range[0], args.B_range[1], args.B_num)
@@ -239,9 +258,9 @@ if __name__ == '__main__':
         i = 0
         names = ['electric_field', 'field_angle_degrees', 'magnetic_field']
 
-        for E in E_list:
-            for angle in angle_list:
-                for B in B_list:
+        for B in B_list:
+            for E in E_list:
+                for angle in angle_list:
                     i += 1
                     var_cfg = create_var_cfg(tmpdir, i, names, [E, angle, B])
                     cmd_list.append([['./particle_swarm',
@@ -278,6 +297,11 @@ if __name__ == '__main__':
             td_matrix[i, j] = line.split()[2]
             if args.sigma:
                 td_matrix[i, j + n_cols] = line.split()[3]
+
+    # Fix mobilities for specific angles (where they are undefined)
+    if (len(angle_list) > 3):
+        fix_mobilities(td_matrix, td_names, args.E_num,
+                       args.B_num, angle_list)
 
     header = '# ' + ' '.join(td_names)
 
