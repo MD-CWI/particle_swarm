@@ -99,10 +99,13 @@ if __name__ == '__main__':
         write_col('alpha', 'alpha[1/m]', multicol=True)
         write_col('eta', 'eta[1/m]', multicol=True)
         # Take the diffusion coefficient perpendicular to E and B
-        write_col('diff_1', 'diff[m2/s]', multicol=True)
+        write_col('diff_1', 'diff_xB[m2/s]', multicol=True)
+        write_col('diff_3', 'diff_B[m2/s]', multicol=True)
+        write_col('energy', 'energy[eV]', multicol=True)
     else:
         write_col('mu_B', 'mu[m2/Vs]')
         write_col('alpha', 'alpha[1/m]')
         write_col('eta', 'eta[1/m]')
         write_col('diff_3', 'diffL[m2/s]')
         write_col('diff_1', 'diffT[m2/s]')
+        write_col('energy', 'energy[eV]')
