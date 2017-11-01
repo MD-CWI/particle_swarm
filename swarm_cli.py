@@ -152,7 +152,7 @@ def progress_bar(pct):
 
 
 # Adjust mobilities for fields in which they are undefined (because of division
-# by zero), by linearly extrapolating from the nearest values
+# by zero), by linearly copying or extrapolating from the nearest values
 def fix_mobilities(tbl, names, E_num, B_num, angle_list):
     eps = 1e-5
     angles = map(float, angle_list)
@@ -164,13 +164,16 @@ def fix_mobilities(tbl, names, E_num, B_num, angle_list):
     if min(angles) < eps:
         for n in range(B_num * E_num):
             data = tbl[n*angle_num:(n+1)*angle_num, :]
-            data[0, i_muxB] = 2 * data[1, i_muxB] - data[2, i_muxB]
-            data[0, i_muExB] = 2 * data[1, i_muExB] - data[2, i_muExB]
+            # Copy values because uncertainty is large, and gradient probably
+            # goes to zero
+            data[0, i_muxB] = data[1, i_muxB]
+            data[0, i_muExB] = data[1, i_muExB]
             tbl[n*angle_num:(n+1)*angle_num, :] = data
 
     if max(angles) > 90.0 - eps:
         for n in range(B_num * E_num):
             data = tbl[n*angle_num:(n+1)*angle_num, :]
+            # Linearly extrapolate
             data[angle_num-1, i_muB] = 2 * data[angle_num-2, i_muB] -\
                 data[angle_num-3, i_muB]
             tbl[n*angle_num:(n+1)*angle_num, :] = data
