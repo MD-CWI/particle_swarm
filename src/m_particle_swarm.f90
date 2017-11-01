@@ -510,7 +510,8 @@ contains
     write(*, "(A24,2E12.4)") "mu_xB = ", mu, std
 
     ! mobility in ExB-direction (x-velocity over Ey = E_perp)
-    if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp))) then
+    if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp)) .and. &
+         abs(SWARM_field%Bz) > sqrt(epsilon(1.0_dp))) then
        mu = tds(ix_vel)%val(1) / SWARM_field%Ey
        std = fac * sqrt(tds(ix_vel)%var(1)) / abs(SWARM_field%Ey)
     else
