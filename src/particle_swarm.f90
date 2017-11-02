@@ -13,18 +13,21 @@ program particle_swarm
   type(PC_t)          :: pc    ! Particle data
   type(SWARM_field_t) :: field ! The field configuration
   type(SWARM_td_t)    :: td(SWARM_num_td)
-  logical             :: dry_run
+  logical             :: dry_run, visualize_only
 
   call initialize_all(cfg)
-  call CFG_get(cfg, "dry_run", dry_run)
 
   if (.not. dry_run) then
      call get_field_configuration(cfg, field)
      call CFG_get(cfg, "swarm_size", swarm_size)
-
      call SWARM_initialize(cfg, td, field)
-     call SWARM_get_data(pc, swarm_size, td)
-     call SWARM_print_results(td)
+
+     if (visualize_only) then
+        call SWARM_visualize(pc, swarm_size, cfg)
+     else
+        call SWARM_get_data(pc, swarm_size, td)
+        call SWARM_print_results(td)
+     end if
   end if
 
 contains
@@ -46,7 +49,6 @@ contains
     real(dp), allocatable          :: gas_fracs(:)
     type(CS_t), allocatable        :: cross_secs(:)
     logical                        :: consecutive_run
-    logical                        :: dry_run
 
     ! Create default parameters for the simulation (routine contained below)
     call create_sim_config(cfg)
@@ -68,6 +70,9 @@ contains
        end if
        prev_name = tmp_name
     end do
+
+    call CFG_get(cfg, "dry_run", dry_run)
+    call CFG_get(cfg, "visualize_only", visualize_only)
 
     call CFG_get_size(cfg, "gas_components", n_gas_comp)
     call CFG_get_size(cfg, "gas_fractions", n_gas_frac)
@@ -104,13 +109,16 @@ contains
        call CS_write_summary(cross_secs, &
             trim(output_dir) // "/" // trim(swarm_name) // "_cs_summary.txt")
 
-       print *, "Initializing particle model", 1
        call CFG_get(cfg, "particle_lkptbl_size", tbl_size)
        call CFG_get(cfg, "swarm_size", swarm_size)
 
-       ! Allocate storage for 8 times the swarm size. There are checks in place
-       ! to make sure it cannot grow to such a large size.
-       max_num_part = 8 * swarm_size
+       if (visualize_only) then
+          call CFG_get(cfg, "visualize_max_particles", max_num_part)
+       else
+          ! Allocate storage for 8 times the swarm size. There are checks in place
+          ! to make sure it cannot grow to such a large size.
+          max_num_part = 8 * swarm_size
+       end if
 
        call pc%initialize(UC_elec_mass, cross_secs, &
             tbl_size, max_ev, max_num_part, get_random_seed())
@@ -148,7 +156,6 @@ contains
     call CFG_get(cfg, "particle_mover", particle_mover)
     call CFG_get(cfg, "magnetic_field", magnetic_field)
     call CFG_get(cfg, "electric_field", electric_field)
-    call CFG_get(cfg, "dry_run", dry_run)
 
     select case (trim(particle_mover))
     case ("analytic")
@@ -178,7 +185,21 @@ contains
     call CFG_add(cfg, "consecutive_run", .false., &
          "True means: use data from a previous run with the same name")
     call CFG_add(cfg, "dry_run", .false., &
-         "True means: only write simulation settings, no results'")
+         "True means: only write simulation settings, no results")
+    call CFG_add(cfg, "visualize_only", .false., &
+         "True means: only generate files to visualize swarm")
+    call CFG_add(cfg, "visualize_max_particles", 100*1000, &
+         "Maximum number of particles for swarm visualization")
+    call CFG_add(cfg, "visualize_rotate_Ez", .false., &
+         "Rotate results so that E points in the z-direction")
+
+    ! Settings for visualization
+    call CFG_add(cfg, "visualize_end_time", 1e-9_dp, &
+         "End time for visualizing swarm")
+    call CFG_add(cfg, "visualize_dt_output", 5e-11_dp, &
+         "Time between writing visualization files")
+    call CFG_add(cfg, "visualize_base_name", "particle_data", &
+         "Base file name for visualization files")
 
     ! General simulation parameters
     call CFG_add(cfg, "electric_field", 1.0e7_dp, &
