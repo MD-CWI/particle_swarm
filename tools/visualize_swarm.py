@@ -74,6 +74,8 @@ def create_swarm_cfg(tmpdir, args):
     f.write('swarm_name = visualize\n')
     f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
     f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
+    f.write('gas_pressure = ' + str(args.p) + '\n')
+    f.write('gas_temperature = ' + str(args.T) + '\n')
     f.write('swarm_size = ' + str(args.npart) + '\n')
     f.write('consecutive_run = F\n')
     f.write('dry_run = F\n')
