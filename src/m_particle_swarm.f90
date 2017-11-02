@@ -556,13 +556,12 @@ contains
     ! Determine rc, the vector pointing from the center of gyration
     rc = cross_product(part%v, SWARM_omega_unitvec) / SWARM_field%omega_c
 
-
     ! Rotate position and velocity
     part%v = rotate_around_axis(part%v, SWARM_omega_unitvec, theta)
     rc_rot = rotate_around_axis(rc, SWARM_omega_unitvec, theta)
 
     ! Update the position with the change in guiding center
-    part%x = part%x + (rc_rot - rc)
+    part%x = part%x + (rc_rot - rc) + SWARM_field%ExB_drift * dt
 
     ! Add back the plasma drift velocity
     part%v = part%v + SWARM_field%ExB_drift
