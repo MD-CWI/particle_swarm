@@ -290,24 +290,33 @@ contains
   end subroutine update_td
 
   !> Initialize a new swarm
-  subroutine new_swarm(pc, swarm_size, init_eV)
+  subroutine new_swarm(pc, swarm_size, init_eV, init_v0)
     use m_units_constants
     use m_random
-    type(PC_t), intent(inout) :: pc
-    integer, intent(in)       :: swarm_size
-    real(dp), intent(in)      :: init_eV !< Initial energy (in eV) op particles
-    integer                   :: ll
-    real(dp)                  :: x(3), v(3), a(3), vel
+    type(PC_t), intent(inout)       :: pc
+    integer, intent(in)             :: swarm_size
+    real(dp), intent(in), optional  :: init_eV    !< Initial energy (in eV)
+    real(dp), intent(in), optional  :: init_v0(3) !< Initial velocity (in m/s)
+    integer                         :: ll
+    real(dp)                        :: x(3), v(3), a(3), vel
 
     call pc%remove_particles()
 
-    do ll = 1, swarm_size
-       x   = 0
-       a   = SWARM_field%E_vec * UC_elec_q_over_m
+    x   = 0
+    a   = SWARM_field%E_vec * UC_elec_q_over_m
+
+    if (present(init_eV)) then
        vel = sqrt(2 * init_eV * UC_elem_charge/UC_elec_mass)
-       v   = pc%rng%sphere(vel)
-       call pc%create_part(x, v, a, 1.0_dp, 0.0_dp)
-    end do
+
+       do ll = 1, swarm_size
+          v   = pc%rng%sphere(vel)
+          call pc%create_part(x, v, a, 1.0_dp, 0.0_dp)
+       end do
+    else if (present(init_v0)) then
+       do ll = 1, swarm_size
+          call pc%create_part(x, init_v0, a, 1.0_dp, 0.0_dp)
+       end do
+    end if
   end subroutine new_swarm
 
   !> Produce files to visualize a swarm of electrons
@@ -318,13 +327,15 @@ contains
     type(CFG_t), intent(in)   :: cfg
     character(len=200)        :: base_name
     integer                   :: n, n_steps
-    real(dp)                  :: t_end, dt_output
+    real(dp)                  :: t_end, dt_output, t
+    real(dp)                  :: v0(3), rotmat(2,2)
     logical                   :: rotate
 
     call CFG_get(cfg, "visualize_end_time", t_end)
     call CFG_get(cfg, "visualize_dt_output", dt_output)
     call CFG_get(cfg, "visualize_base_name", base_name)
     call CFG_get(cfg, "visualize_rotate_Ez", rotate)
+    call CFG_get(cfg, "visualize_init_v0", v0)
 
     n_steps = nint(t_end/dt_output)
 
@@ -333,25 +344,35 @@ contains
     if (swarm_size > size(pc%particles)) &
          error stop "SWARM_visualize: increase SWARM_max_particles"
 
-    call new_swarm(pc, swarm_size, 0.0_dp)
-    call write_particles(pc, trim(base_name), 0.0_dp, 0, rotate)
+    ! Rotate around x-axis so E points in the z direction
+    if (rotate) then
+       t = -SWARM_field%angle_deg * acos(-1.0_dp) / 180_dp
+       rotmat(:, 1) = [cos(t), -sin(t)]
+       rotmat(:, 2) = [sin(t), cos(t)]
+       v0(2:3)      = matmul(rotmat, v0(2:3))
+    else
+       rotmat(:, 1) = [1.0_dp, 0.0_dp]
+       rotmat(:, 2) = [0.0_dp, 1.0_dp]
+    end if
+
+    call new_swarm(pc, swarm_size, init_v0=v0)
+    call write_particles(pc, trim(base_name), 0.0_dp, 0, rotmat)
 
     do n = 1, n_steps
        call pc%advance(dt_output)
-       call write_particles(pc, trim(base_name), n * dt_output, n, rotate)
+       call write_particles(pc, trim(base_name), n * dt_output, n, rotmat)
     end do
   end subroutine SWARM_visualize
 
-  subroutine write_particles(pc, base_name, time, cntr, rotate)
+  subroutine write_particles(pc, base_name, time, cntr, rotmat)
     type(PC_t), intent(inout)    :: pc
     character(len=*), intent(in) :: base_name
     character(len=200)           :: file_name
     real(dp), intent(in)         :: time
     integer, intent(in)          :: cntr
-    logical, intent(in)          :: rotate
+    real(dp), intent(in)         :: rotmat(2,2)
     integer                      :: i
     integer, parameter           :: my_unit = 300
-    real(dp)                     :: rotmat(2,2), t
     real(dp), allocatable        :: pdata(:, :)
     real(dp), save               :: rmin(3), rmax(3)
 
@@ -366,15 +387,8 @@ contains
     pdata(5, :) = pc%particles(1:pc%n_part)%v(2)
     pdata(6, :) = pc%particles(1:pc%n_part)%v(3)
 
-    if (rotate) then
-       ! Rotate so E points in the z direction
-       t = -SWARM_field%angle_deg * acos(-1.0_dp) / 180_dp
-       rotmat(:, 1) = [cos(t), -sin(t)]
-       rotmat(:, 2) = [sin(t), cos(t)]
-
-       pdata(2:3, :) = matmul(rotmat, pdata(2:3, :))
-       pdata(5:6, :) = matmul(rotmat, pdata(5:6, :))
-    end if
+    pdata(2:3, :) = matmul(rotmat, pdata(2:3, :))
+    pdata(5:6, :) = matmul(rotmat, pdata(5:6, :))
 
     if (cntr == 1) then
        rmin = minval(pdata(1:3, :), dim=2)
@@ -502,7 +516,7 @@ contains
     real(dp), allocatable :: coll_rates(:), tmp_vec(:)
 
     ! Create a new swarm with 1 eV electrons
-    call new_swarm(pc, swarm_size, 1.0_dp)
+    call new_swarm(pc, swarm_size, init_eV=1.0_dp)
 
     ! An electron accelerating from zero velocity gains en_eV in this time (in
     ! the absence of a magnetic field). This time step is only used to determine
