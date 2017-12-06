@@ -42,6 +42,8 @@ def get_args():
     parser.add_argument('-mover', type=str,
                         choices=['analytic', 'boris', 'verlet'],
                         default='analytic', help='Choice of particle mover')
+    parser.add_argument('-eV_max', type=float, default=500.0,
+                        help='Maximum particle energy in eV')
 
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-E', type=float,
@@ -112,6 +114,7 @@ def create_swarm_cfg(tmpdir, args):
     f.write('electric_field = ' + str(args.E_range[0]) + '\n')
     f.write('magnetic_field = ' + str(args.B_range[0]) + '\n')
     f.write('field_angle_degrees = ' + str(args.angle_range[0]) + '\n')
+    f.write('particle_max_energy_ev = ' + str(args.eV_max) + '\n')
     f.write('particle_mover = ' + args.mover + '\n')
     f.close()
     return fname
