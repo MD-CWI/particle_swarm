@@ -49,7 +49,7 @@ def write_col(varname, name, multicol=False):
             vals = ["{:.4E}".format(val) for val in td[ix:ix+n_angles, ix_col]]
             print("{:.4E} {}".format(fld, ' '.join(vals)))
         else:
-            fld = (td[i, ix_Ey]**2 + td[i, ix_Ez]**2)**0.5
+            fld = abs(td[i, ix_E])
             val = "{:.4E}".format(td[i, ix_col])
             print("{:.4E} {}".format(fld, val))
     print("-----------------------")
