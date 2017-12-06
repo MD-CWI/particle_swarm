@@ -192,6 +192,8 @@ contains
          "Maximum number of particles for swarm visualization")
     call CFG_add(cfg, "visualize_rotate_Ez", .false., &
          "Rotate results so that E points in the z-direction")
+    call CFG_add(cfg, "visualize_init_v0", [0.0_dp, 0.0_dp, 0.0_dp], &
+         "Initial velocity of particles")
 
     ! Settings for visualization
     call CFG_add(cfg, "visualize_end_time", 1e-9_dp, &

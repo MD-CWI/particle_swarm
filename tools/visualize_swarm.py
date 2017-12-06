@@ -50,6 +50,8 @@ def get_args():
                         help='Time step for visualization')
     parser.add_argument('-npart', type=int, default=10,
                         help='Initial number of particles')
+    parser.add_argument('-v0', type=float, nargs=3, default=[0., 0., 0.],
+                        help='Initial velocity (m/s) of particles')
     parser.add_argument('-maxpart', type=int, default=1000000,
                         help='Maximum number of particles')
     parser.add_argument('-E', type=float, required=True,
@@ -81,6 +83,7 @@ def create_swarm_cfg(tmpdir, args):
     f.write('dry_run = F\n')
     f.write('visualize_only = T\n')
     f.write('visualize_rotate_Ez = T\n')
+    f.write('visualize_init_v0 = ' + ' '.join(map(str, args.v0)) + '\n')
     f.write('visualize_end_time = ' + str(args.t) + '\n')
     f.write('visualize_dt_output = ' + str(args.dt) + '\n')
     f.write('visualize_max_particles = ' + str(args.maxpart) + '\n')
