@@ -40,6 +40,7 @@ contains
     type(CFG_t), intent(inout)     :: cfg
     integer                        :: nn, tbl_size, max_num_part
     integer                        :: swarm_size, n_gas_comp, n_gas_frac
+    integer                        :: rng_seed(4)
     real(dp)                       :: pressure, temperature, max_ev
     real(dp)                       :: magnetic_field, electric_field, tmp
     character(len=200)             :: cs_file, output_dir
@@ -112,6 +113,9 @@ contains
        call CFG_get(cfg, "particle_lkptbl_size", tbl_size)
        call CFG_get(cfg, "swarm_size", swarm_size)
 
+       call CFG_get(cfg, "particle_rng_seed", rng_seed)
+       if (all(rng_seed == 0)) rng_seed = get_random_seed()
+
        if (visualize_only) then
           call CFG_get(cfg, "visualize_max_particles", max_num_part)
        else
@@ -121,7 +125,7 @@ contains
        end if
 
        call pc%initialize(UC_elec_mass, cross_secs, &
-            tbl_size, max_ev, max_num_part, get_random_seed())
+            tbl_size, max_ev, max_num_part, rng_seed)
 
        print *, "--------------------"
        print *, "Gas information"
@@ -150,7 +154,7 @@ contains
     else ! Restarted run (can only change field!)
        tmp_name = trim(output_dir) // "/" // trim(swarm_name)
        call pc%init_from_file(trim(tmp_name) // "_params.dat", &
-            trim(tmp_name) // "_lt.dat", get_random_seed())
+            trim(tmp_name) // "_lt.dat", rng_seed)
     end if
 
     call CFG_get(cfg, "particle_mover", particle_mover)
@@ -239,6 +243,8 @@ contains
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
 
     ! Particle model related parameters
+    call CFG_add(cfg, "particle_rng_seed", [0, 0, 0, 0], &
+         "Seed for random numbers. If all zero generate seed from clock.")
     call CFG_add(cfg, "particle_lkptbl_size", 10000, &
          "The size of the lookup table for the collision rates")
     call CFG_add(cfg, "particle_max_energy_ev", 500.0_dp, &
