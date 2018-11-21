@@ -124,18 +124,18 @@ def convert():
         tbl_data[:, dc_col] = tbl_data[:, dc_col] / gas_num_dens
         tbl_data[:, alpha_col] = tbl_data[:, alpha_col] * gas_num_dens
 
-        write_entry(r'Efield[V/m]_vs_mu[m2/Vs]', tbl_data[:, Efield_col],
+        write_entry(r'efield[V/m]_vs_mu[m2/Vs]', tbl_data[:, Efield_col],
                     tbl_data[:, mu_col], cfg.gas_name, f)
-        write_entry(r'Efield[V/m]_vs_dif[m2/s]', tbl_data[:, Efield_col],
+        write_entry(r'efield[V/m]_vs_dif[m2/s]', tbl_data[:, Efield_col],
                     tbl_data[:, dc_col], cfg.gas_name, f)
-        write_entry(r'Efield[V/m]_vs_alpha[1/m]', tbl_data[:, Efield_col],
+        write_entry(r'efield[V/m]_vs_alpha[1/m]', tbl_data[:, Efield_col],
                     tbl_data[:, alpha_col], cfg.gas_name, f)
         if (eta_col != -1):
             tbl_data[:, eta_col] = tbl_data[:, eta_col] * gas_num_dens
-            write_entry(r'Efield[V/m]_vs_eta[1/m]',
+            write_entry(r'efield[V/m]_vs_eta[1/m]',
                         tbl_data[:, Efield_col], tbl_data[:, eta_col],
                         cfg.gas_name, f)
-            write_entry(r'Efield[V/m]_vs_energy[eV]',
+            write_entry(r'efield[V/m]_vs_energy[eV]',
                         tbl_data[:, Efield_col], tbl_data[:, eV_col],
                         cfg.gas_name, f)
 

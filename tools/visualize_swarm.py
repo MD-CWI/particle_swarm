@@ -43,6 +43,8 @@ def get_args():
     parser.add_argument('-mover', type=str,
                         choices=['analytic', 'boris', 'verlet'],
                         default='analytic', help='Choice of particle mover')
+    parser.add_argument('-rng', type=int, nargs=4, default=[0, 0, 0, 0],
+                        help='Random number seed, if all zero auto-generate')
 
     parser.add_argument('-t', type=float, required=True,
                         help='End time for visualization')
@@ -92,6 +94,7 @@ def create_swarm_cfg(tmpdir, args):
     f.write('magnetic_field = ' + str(args.B) + '\n')
     f.write('field_angle_degrees = ' + str(args.angle) + '\n')
     f.write('particle_mover = ' + args.mover + '\n')
+    f.write('particle_rng_seed = ' + ' '.join(map(str, args.rng)) + '\n')
     f.close()
     return fname
 
@@ -176,7 +179,7 @@ if __name__ == '__main__':
                          "do for [i=0:{}] {{\n".format(ix_max) +
                          "set output sprintf('{}_%06d.png', i)\n".format(args.basename) +
                          "splot sprintf('{}_%06d.txt', i)".format(args.basename) +
-                         " u 1:2:3 notitle w p pt 7 ps 1}\n")
+                         " u 1:2:3 notitle w p pt 7 ps 0.5}\n")
 
             os.system('cd {} && gnuplot script.gp'.format(args.dirname))
             cmd = 'ffmpeg -y -r {} -f image2 -i {}_%06d.png -vframes {} {}.mp4'.format(
