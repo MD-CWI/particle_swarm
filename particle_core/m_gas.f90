@@ -26,6 +26,7 @@ module m_gas
   real(dp), protected                       :: GAS_pressure
   real(dp), protected                       :: GAS_temperature
   real(dp), protected                       :: GAS_number_dens
+  logical, protected                        :: GAS_initialized = .false.
 
   public :: GAS_initialize
   public :: GAS_get_fraction
@@ -47,12 +48,16 @@ contains
     GAS_comp_fracs  = comp_fracs
 
     if (abs(sum(GAS_comp_fracs) - 1) > err_threshold) then
-       error stop "Gas components are not normalized"
+       print *, "Gas comps are not normalized: ", comp_fracs
+       stop
     end if
 
     ! Ideal gas law, pressure is in bar
     GAS_number_dens = 1.0D5 * GAS_pressure / &
          (UC_boltzmann_const * GAS_temperature)
+    
+    ! Tell that GAS is initialized 
+    GAS_initialized = .true.
   end subroutine GAS_initialize
 
   real(dp) function GAS_get_fraction(comp_name)
@@ -68,7 +73,7 @@ contains
 
     print *, "GAS_get_fraction: " // comp_name // " not found"
     GAS_get_fraction = 0.0_dp
-    error stop "GAS_get_fraction: component not found"
+    stop
   end function GAS_get_fraction
 
 end module m_gas

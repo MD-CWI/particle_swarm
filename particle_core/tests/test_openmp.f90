@@ -1,6 +1,5 @@
 program test_m_particle_core
   use m_particle_core
-  use m_particle_par
   use m_cross_sec
   use m_units_constants
 
@@ -10,24 +9,23 @@ program test_m_particle_core
   character(len=*), parameter :: cs_file = "test_m_particle_core_cs.txt"
   character(len=*), parameter :: gas_name = "druyv_gas"
 
-  integer, parameter         :: max_num_part  = 1000*1000
-  integer, parameter         :: init_num_part = 10*1000
-  integer, parameter         :: max_num_steps = 100
-  integer, parameter         :: lkp_tbl_size  = 1000
-  integer, parameter         :: num_lists = 12
-  integer, parameter :: n_bins = 100
-  real(dp), parameter        :: delta_t       = 5.0e-9_dp
-  real(dp), parameter        :: max_en_eV     = 1.0e-1_dp
-  real(dp), parameter        :: neutral_dens  = 2.5e25_dp
-  real(dp), parameter        :: part_mass     = UC_elec_mass
-  real(dp), parameter        :: init_accel(3) = (/0.0_dp, 0.0_dp, 1.0e12_dp/)
-  real(dp)                   :: norm_cross_sec, mass_ratio
-  real(dp)                   :: pos(3), vel(3), accel(3), weight
-  real(dp) :: bin_args(1)
-  integer                    :: ll, step, num_colls, i
+  integer, parameter      :: max_num_part  = 1000*1000
+  integer, parameter      :: init_num_part = 10*1000
+  integer, parameter      :: max_num_steps = 100
+  integer, parameter      :: lkp_tbl_size  = 1000
+  integer, parameter      :: num_lists     = 12
+  integer, parameter      :: n_bins        = 100
+  real(dp), parameter     :: delta_t       = 5.0e-9_dp
+  real(dp), parameter     :: max_en_eV     = 1.0e-1_dp
+  real(dp), parameter     :: neutral_dens  = 2.5e25_dp
+  real(dp), parameter     :: part_mass     = UC_elec_mass
+  real(dp), parameter     :: init_accel(3) = (/0.0_dp, 0.0_dp, 1.0e12_dp/)
+  real(dp)                :: norm_cross_sec, mass_ratio
+  real(dp)                :: pos(3), vel(3), accel(3), weight
+  integer                 :: ll, step, num_colls
   type(CS_t), allocatable :: cross_secs(:)
-  integer, parameter :: n_pc = 4
-  type(PC_t) :: pmodels(n_pc)
+  type(PC_t)              :: pc
+  type(PC_events_t)       :: events
 
   print *, "Testing m_particle_core.f90 implementation"
 
@@ -47,48 +45,29 @@ program test_m_particle_core
 
   print *, "Initializing particle module"
   print *, part_mass
-  do i = 1, n_pc
-     call pmodels(i)%initialize(part_mass, cross_secs, lkp_tbl_size, &
-          max_en_eV, max_num_part)
-  end do
+  call pc%initialize(part_mass, max_num_part)
+  call pc%use_cross_secs(max_en_eV, lkp_tbl_size, cross_secs)
 
-  num_colls = pmodels(1)%get_num_colls()
+  num_colls = pc%get_num_colls()
   deallocate(cross_secs)
 
   print *, "Creating initial particles"
   do ll = 1, init_num_part
-     pos = 0.0_dp
-     vel = 0.0_dp
-     accel = init_accel
+     pos    = 0.0_dp
+     vel    = 0.0_dp
+     accel  = init_accel
      weight = 1
-     ! i = 1 + mod(ll, n_pc)
-     call pmodels(1)%create_part(pos, vel, accel, weight, 0.0_dp)
+     call pc%create_part(pos, vel, accel, weight, 0.0_dp)
   end do
-
-  call PC_share(pmodels)
 
   do step = 1, max_num_steps
      print *, ""
      print *, "at step", step, " and time ", (step-1) * delta_t
      call print_stats()
 
-     !$omp parallel do
-     do i = 1, n_pc
-        call pmodels(i)%advance(delta_t)
-     end do
-     !$omp end parallel do
+     call pc%advance_openmp(delta_t, events)
   end do
 
-  call print_stats()
-  do i = 1, n_pc
-     call pmodels(i)%merge_and_split((/.false., .false., .false./), &
-          1.0e-12_dp, .true., get_weight_2, PC_merge_part_rxv, PC_split_part)
-  end do
-  call print_stats()
-  do i = 1, n_pc
-     call pmodels(i)%merge_and_split((/.false., .false., .false./), &
-          1.0e-12_dp, .true., get_weight_2, PC_merge_part_rxv, PC_split_part)
-  end do
   call print_stats()
 
 contains
@@ -107,16 +86,12 @@ contains
     integer :: n_part
     real(dp) :: sum_x(3), sum_v(3), sum_a(3), sum_en
     real(dp) :: sum_weight
-    real(dp) :: sum_vec(11), tmp_vec(11)
+    real(dp) :: sum_vec(11)
 
     n_part = 0
-    sum_vec = 0
 
-    do i = 1, n_pc
-       n_part = n_part + pmodels(i)%get_num_sim_part()
-       call pmodels(i)%compute_vector_sum(part_stats, tmp_vec)
-       sum_vec = sum_vec + tmp_vec
-    end do
+    n_part = n_part + pc%get_num_sim_part()
+    call pc%compute_vector_sum(part_stats, sum_vec)
 
     sum_weight = sum_vec(11)
     sum_x = sum_vec(1:3)
@@ -131,15 +106,5 @@ contains
          (sqrt(3*norm_cross_sec**2 * (2 / (1 + 1/mass_ratio)) / (8 * init_accel(3)**2)) *  UC_elec_volt)
     print *, "Number of particles           ", n_part, sum_weight
   end subroutine print_stats
-
-  real(dp) function get_weight_1(my_part)
-    type(PC_part_t), intent(in) :: my_part
-    get_weight_1 = 1
-  end function get_weight_1
-
-  real(dp) function get_weight_2(my_part)
-    type(PC_part_t), intent(in) :: my_part
-    get_weight_2 = 2
-  end function get_weight_2
 
 end program test_m_particle_core

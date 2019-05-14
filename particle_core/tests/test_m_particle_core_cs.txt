@@ -13,14 +13,14 @@ COMMENT: Constant momentum-transfer cross sec
 # 0.0 / threshold energy (not used)
 # COMMENT: Constant
 # --------------------
-# 0.0     1.0e-22
-# 1000.0  1.0e-22
+# 0.0     1.0e-23
+# 1000.0  1.0e-23
 # --------------------
 
 # ATTACHMENT
 # druyv_gas
 # COMMENT: Constant
 # --------------------
-# 0.0     1.0e-22
-# 1000.0  1.0e-22
+# 0.0     1.0e-23
+# 1000.0  1.0e-23
 # --------------------

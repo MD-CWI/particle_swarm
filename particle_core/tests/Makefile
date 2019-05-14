@@ -1,13 +1,11 @@
-FC 	:= mpif90
-FFLAGS	:= -Wall -ffpe-trap=invalid,zero,overflow -g -O2 -fopenmp \
-	-fcheck=array-temps,bounds,do,mem,pointer
-TESTS	:= test_m_particle_core test_m_cross_sec
+FC 	:= gfortran
+FFLAGS	:= -Wall -g -O2 -fopenmp $(USR_FLAGS)
+TESTS	:= test_m_cross_sec test_openmp test_swarm ion_drift
 
 # Need these libraries for the tests
-BASEDIR	:= ../../
-LIBS	:= particle_core fosito
-INCDIRS := $(addprefix $(BASEDIR), $(LIBS))
-LIBDIRS := ../ $(INCDIRS)
+LIBS	:= particle_core
+INCDIRS := ..
+LIBDIRS := ..
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
@@ -24,3 +22,6 @@ test:	$(TESTS)
 
 clean:
 	$(RM) *.o *.mod $(TESTS)
+
+# Dependencies
+$(TESTS): ../libparticle_core.a
