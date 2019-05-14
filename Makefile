@@ -1,4 +1,4 @@
-SRC_DIRS	:= src fosito particle_core
+SRC_DIRS	:= src particle_core
 CREATE_DIRS	:= output
 
 # Directories with altered names (useful for cleaning)
@@ -18,6 +18,4 @@ $(CLEANSRC):
 		$(MAKE) -C $(@:clean-%=%) clean
 
 # Dependecy information
-src:		fosito particle_core | $(CREATE_DIRS)
-particle_core: 	fosito
-
+src:		particle_core | $(CREATE_DIRS)

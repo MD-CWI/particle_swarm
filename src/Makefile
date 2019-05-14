@@ -6,12 +6,12 @@ ifeq ($(DEBUG), 1)
 	-pedantic -finit-real=nan
 endif
 
-SRCS	:= m_particle_swarm.f90 m_io.f90
+SRCS	:= m_particle_swarm.f90 m_io.f90 m_config.f90
 OBJS	:= $(SRCS:%.f90=%.o)
 
-INCDIRS	:= ../fosito ../particle_core
-LIBDIRS := ../fosito ../particle_core
-LIBS	:= particle_core fosito
+INCDIRS	:= ../particle_core
+LIBDIRS := ../particle_core
+LIBS	:= particle_core
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
@@ -27,5 +27,5 @@ clean:
 	$(RM) -f *.o *.mod ../particle_swarm
 
 # Dependency information
-m_particle_swarm.o:	m_io.o
-../particle_swarm:	$(OBJS) ../fosito/libfosito.a ../particle_core/libparticle_core.a
+m_particle_swarm.o:	m_io.o m_config.o
+../particle_swarm:	$(OBJS) ../particle_core/libparticle_core.a
