@@ -6,6 +6,8 @@ ifeq ($(DEBUG), 1)
 	-pedantic -finit-real=nan
 endif
 
+vpath %.f90 config_fortran
+
 SRCS	:= m_particle_swarm.f90 m_io.f90 m_config.f90
 OBJS	:= $(SRCS:%.f90=%.o)
 

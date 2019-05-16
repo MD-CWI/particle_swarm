@@ -126,13 +126,14 @@ contains
   end subroutine init_td
 
   !> Advance a swarm over time
-  subroutine swarm_advance(pc, tau, desired_num_part, growth_rate)
-    type(PC_t), intent(inout) :: pc
-    real(dp), intent(in)      :: tau
-    integer, intent(in)       :: desired_num_part
-    real(dp), intent(in)      :: growth_rate
-    integer                   :: n, n_steps
-    real(dp)                  :: dt
+  subroutine swarm_advance(pc, events, tau, desired_num_part, growth_rate)
+    type(PC_t), intent(inout)        :: pc
+    type(PC_events_t), intent(inout) :: events
+    real(dp), intent(in)             :: tau
+    integer, intent(in)              :: desired_num_part
+    real(dp), intent(in)             :: growth_rate
+    integer                          :: n, n_steps
+    real(dp)                         :: dt
 
     ! Sometimes a swarm can rapidly grow or shink in time. Therefore we advance
     ! the swarm in steps, so that we can resize it if necessary.
@@ -189,7 +190,7 @@ contains
        do
           ! Double particles
           do ix = 1, cur_size
-             part = pc%get_part(ix)
+             part = pc%particles(ix)
              call pc%add_part(part)
           end do
           cur_size = cur_size * 2
@@ -199,7 +200,7 @@ contains
        ! Reduce number of particles
        chance = new_size / real(cur_size, dp)
        do ix = 1, cur_size
-          if (pc%rng%uni_01() > chance) call pc%remove_part(ix)
+          if (pc%rng%unif_01() > chance) call pc%remove_part(ix)
        end do
        call pc%clean_up()
     end if
@@ -232,7 +233,7 @@ contains
     corr_fac = num_part/(num_part-1.0_dp)
 
     do ix = 1, num_part
-       part = pc%get_part(ix)
+       part = pc%particles(ix)
        ps%n_samples  = ps%n_samples + 1
        inv_n_samples = 1.0_dp / ps%n_samples
        v             = part%v
@@ -322,14 +323,14 @@ contains
   !> Produce files to visualize a swarm of electrons
   subroutine SWARM_visualize(pc, swarm_size, cfg)
     use m_config
-    type(PC_t), intent(inout) :: pc
-    integer, intent(in)       :: swarm_size
-    type(CFG_t), intent(in)   :: cfg
-    character(len=200)        :: base_name
-    integer                   :: n, n_steps
-    real(dp)                  :: t_end, dt_output, t
-    real(dp)                  :: v0(3), rotmat(2,2)
-    logical                   :: rotate
+    type(PC_t), intent(inout)  :: pc
+    integer, intent(in)        :: swarm_size
+    type(CFG_t), intent(inout) :: cfg
+    character(len=200)         :: base_name
+    integer                    :: n, n_steps
+    real(dp)                   :: t_end, dt_output, t
+    real(dp)                   :: v0(3), rotmat(2,2)
+    logical                    :: rotate
 
     call CFG_get(cfg, "visualize_end_time", t_end)
     call CFG_get(cfg, "visualize_dt_output", dt_output)
