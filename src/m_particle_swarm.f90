@@ -168,7 +168,7 @@ contains
     dt      = tau/n_steps
 
     do n = 1, n_steps
-       call pc%advance(dt)
+       call pc%advance_openmp(dt)
        call resize_swarm(pc, desired_num_part)
     end do
   end subroutine swarm_advance
@@ -386,7 +386,7 @@ contains
     call write_particles(pc, trim(base_name), 0.0_dp, 0, rotmat)
 
     do n = 1, n_steps
-       call pc%advance(dt_output)
+       call pc%advance_openmp(dt_output)
        call write_particles(pc, trim(base_name), n * dt_output, n, rotmat)
     end do
   end subroutine SWARM_visualize
@@ -560,7 +560,7 @@ contains
     ! Determine when the mean energy is relaxed, so that we can use this swarm
     do cntr = 1, max_its_relax
        do i = 1, frame_size
-          call pc%advance(tau)
+          call pc%advance_openmp(tau)
           call resize_swarm(pc, swarm_size)
           en_hist(i) = pc%get_mean_energy() / UC_elec_volt
        end do

@@ -37,14 +37,14 @@ contains
     use m_gas
     use m_cross_sec
     use m_units_constants
+    use omp_lib
     type(CFG_t), intent(inout)     :: cfg
     integer                        :: nn, tbl_size, max_num_part
     integer                        :: swarm_size, n_gas_comp, n_gas_frac
-    integer                        :: rng_seed(4)
+    integer                        :: rng_seed(4), num_threads
     real(dp)                       :: pressure, temperature, max_ev
     real(dp)                       :: magnetic_field, electric_field, tmp
-    character(len=200)             :: cs_file, output_dir
-    character(len=200)             :: cfg_name, prev_name, tmp_name
+    character(len=200)             :: cs_file, output_dir, tmp_name
     character(len=20)              :: particle_mover
     character(len=20), allocatable :: gas_names(:)
     real(dp), allocatable          :: gas_fracs(:)
@@ -55,22 +55,13 @@ contains
     call create_sim_config(cfg)
     call CFG_sort(cfg)
 
-    swarm_name = ""
-    prev_name = ""
-    do nn = 1, command_argument_count()
-       call get_command_argument(nn, cfg_name)
-       call CFG_read_file(cfg, trim(cfg_name))
+    call CFG_update_from_arguments(cfg)
+    call CFG_get(cfg, "swarm_name", swarm_name)
 
-       call CFG_get(cfg, "swarm_name", tmp_name)
-       if (tmp_name /= "" .and. tmp_name /= prev_name) then
-          if (swarm_name /= "") then
-             swarm_name = trim(swarm_name) // "_" // trim(tmp_name)
-          else
-             swarm_name = trim(tmp_name)
-          end if
-       end if
-       prev_name = tmp_name
-    end do
+    call CFG_get(cfg, "num_threads", num_threads)
+    if (num_threads > 0) then
+       call omp_set_num_threads(num_threads)
+    end if
 
     call CFG_get(cfg, "dry_run", dry_run)
     call CFG_get(cfg, "visualize_only", visualize_only)
@@ -186,6 +177,8 @@ contains
   subroutine create_sim_config(cfg)
     type(CFG_t), intent(inout) :: cfg
 
+    call CFG_add(cfg, "num_threads", -1, &
+         "Number of OpenMP threads to use (default: all)")
     call CFG_add(cfg, "consecutive_run", .false., &
          "True means: use data from a previous run with the same name")
     call CFG_add(cfg, "dry_run", .false., &
