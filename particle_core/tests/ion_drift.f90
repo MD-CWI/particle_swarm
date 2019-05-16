@@ -17,7 +17,6 @@ program ion_drift
   integer             :: i
   type(rate_func_t)   :: rate_funcs(1)
   type(PC_t)          :: pc
-  type(PC_events_t)   :: events
   type(PC_part_t)     :: my_part
 
   mobility  = 7.1e21_dp / gas_N0
@@ -43,8 +42,8 @@ program ion_drift
   end do
 
   do i = 1, 100
-     call pc%advance_openmp(delta_t, events)
-     print *, i, "events/n_part: ", events%n_stored, pc%n_part
+     call pc%advance_openmp(delta_t)
+     print *, i, "events/n_part: ", pc%n_events, pc%n_part
   end do
 
 contains

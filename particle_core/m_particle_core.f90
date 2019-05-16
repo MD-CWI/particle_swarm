@@ -63,12 +63,6 @@ module m_particle_core
      integer         :: ctype !< Collision type
   end type PC_event_t
 
-  !> A list of events (particle collisions)
-  type, public :: PC_events_t
-     integer                       :: n_stored = 0
-     type(PC_event_t), allocatable :: list(:)
-  end type PC_events_t
-
   !> Particle buffer for parallel simulations
   type, public        :: PC_buf_t
      !> Index for newly created particles
@@ -126,6 +120,12 @@ module m_particle_core
 
      !> Magnetic field (for Boris mover)
      real(dp)                     :: B_vec(3) = [0.0_dp, 0.0_dp, 0.0_dp]
+
+     !> Number of stored events
+     integer                       :: n_events = 0
+
+     !> List of events
+     type(PC_event_t), allocatable :: event_list(:)
 
      !> If assigned call this method after moving particles to check whether
      !> they are outside the computational domain (then it should return a
@@ -405,27 +405,27 @@ contains
     self%particles(1:self%n_part) = parts_copy
   end subroutine resize_part_list
 
-  subroutine check_events_allocated(self, events)
-    class(PC_t), intent(in)          :: self
-    type(PC_events_t), intent(inout) :: events
+  subroutine check_events_allocated(self)
+    class(PC_t), intent(inout) :: self
 
-    if (.not. allocated(events%list)) then
-       allocate(events%list(PC_event_list_init_size))
+    if (.not. allocated(self%event_list)) then
+       allocate(self%event_list(PC_event_list_init_size))
     end if
   end subroutine check_events_allocated
 
-  subroutine ensure_events_storage(events, n_new)
-    type(PC_events_t), intent(inout) :: events
-    integer, intent(in)              :: n_new
-    integer                          :: n_stored
-    type(PC_events_t)                :: cpy
+  subroutine ensure_events_storage(self, n_new)
+    class(PC_t), intent(inout) :: self
+    integer, intent(in)        :: n_new
+    integer                    :: n_stored
+    type(PC_event_t), allocatable :: cpy(:)
 
-    n_stored = events%n_stored
-    if (size(events%list) < n_stored + n_new) then
-       cpy = events
-       deallocate(events%list)
-       allocate(events%list(2 * (n_stored + n_new)))
-       events%list(1:n_stored) = cpy%list(1:n_stored)
+    n_stored = self%n_events
+    if (size(self%event_list) < n_stored + n_new) then
+       allocate(cpy(self%n_events))
+       cpy = self%event_list(1:self%n_events)
+       deallocate(self%event_list)
+       allocate(self%event_list(2 * (n_stored + n_new)))
+       self%event_list(1:n_stored) = cpy(1:n_stored)
     end if
   end subroutine ensure_events_storage
 
@@ -445,31 +445,29 @@ contains
   end subroutine limit_advance_dt
 
   !> Advance particles over dt, using one or more step
-  subroutine advance(self, dt, events)
+  subroutine advance(self, dt)
     class(PC_t), intent(inout)       :: self
     real(dp), intent(in)             :: dt
-    type(PC_events_t), intent(inout) :: events
     integer                          :: n, n_steps
     real(dp)                         :: dt_step
 
     call check_methods(self)
     call limit_advance_dt(self, dt, n_steps, dt_step)
-    call check_events_allocated(self, events)
+    call check_events_allocated(self)
 
     ! Advance the particles in one or more steps, which makes sure the buffers
     ! for newly created particles and events are large enough
     do n = 1, n_steps
-       call advance_step(self, dt_step, events)
+       call advance_step(self, dt_step)
     end do
 
     call self%clean_up()
   end subroutine advance
 
   !> Advance particles over dt in a single step
-  subroutine advance_step(self, dt, events)
+  subroutine advance_step(self, dt)
     class(PC_t), intent(inout)       :: self
     real(dp), intent(in)             :: dt
-    type(PC_events_t), intent(inout) :: events
     integer                          :: n
     type(PC_buf_t)                   :: buffer
 
@@ -478,7 +476,7 @@ contains
 
     do while (n <= self%n_part)
        call self%move_and_collide(n, self%rng, buffer)
-       call handle_buffer(self, buffer, events, 0)
+       call handle_buffer(self, buffer, 0)
        n = n + 1
     end do
   end subroutine advance_step
@@ -491,10 +489,9 @@ contains
   end subroutine init_buffer
 
   !> If the buffers for a thread are getting too full, empty them
-  subroutine handle_buffer(self, buffer, events, max_size)
+  subroutine handle_buffer(self, buffer, max_size)
     class(PC_t), intent(inout)       :: self
     type(PC_buf_t), intent(inout)    :: buffer
-    type(PC_events_t), intent(inout) :: events
     !> Keep at most this many buffered items
     integer, intent(in)              :: max_size
     integer                          :: i
@@ -523,34 +520,33 @@ contains
     ! The buffer for events
     if (buffer%i_event > max_size) then
        !$omp critical
-       i = events%n_stored
-       call ensure_events_storage(events, buffer%i_event)
-       events%n_stored = events%n_stored + buffer%i_event
+       i = self%n_events
+       call ensure_events_storage(self, buffer%i_event)
+       self%n_events = self%n_events + buffer%i_event
        !$omp end critical
-       events%list(i+1:i+buffer%i_event) = buffer%event(1:buffer%i_event)
+       self%event_list(i+1:i+buffer%i_event) = buffer%event(1:buffer%i_event)
        buffer%i_event = 0
     end if
   end subroutine handle_buffer
 
   !> Advance the particles over dt in parallel, using one or more steps
-  subroutine advance_openmp(self, dt, events)
+  subroutine advance_openmp(self, dt)
     use omp_lib
     class(PC_t), intent(inout)       :: self
     real(dp), intent(in)             :: dt
-    type(PC_events_t), intent(inout) :: events
     integer                          :: n, n_steps
     real(dp)                         :: dt_step
     type(prng_t)                     :: prng
 
     call check_methods(self)
-    call check_events_allocated(self, events)
+    call check_events_allocated(self)
     call limit_advance_dt(self, dt, n_steps, dt_step)
     call prng%init_parallel(omp_get_max_threads(), self%rng)
 
     ! Advance the particles in one or more steps, which makes sure the buffers
     ! for newly created particles and events are large enough
     do n = 1, n_steps
-       call advance_openmp_step(self, dt_step, prng, events)
+       call advance_openmp_step(self, dt_step, prng)
        call self%clean_up()
     end do
 
@@ -560,12 +556,11 @@ contains
   end subroutine advance_openmp
 
   !> Advance the particles over dt in parallel, in a single step
-  subroutine advance_openmp_step(self, dt, prng, events)
+  subroutine advance_openmp_step(self, dt, prng)
     use omp_lib
     class(PC_t), intent(inout)       :: self
     real(dp), intent(in)             :: dt
     type(prng_t), intent(inout)      :: prng
-    type(PC_events_t), intent(inout) :: events
     type(PC_buf_t)                   :: buffer
     integer                          :: n, tid, n_lo, n_hi
 
@@ -582,12 +577,12 @@ contains
        do n = n_lo, n_hi
           call self%move_and_collide(n, prng%rngs(tid), buffer)
           ! Make sure buffers are not getting too full
-          call handle_buffer(self, buffer, events, PC_advance_buf_size/2)
+          call handle_buffer(self, buffer, PC_advance_buf_size/2)
        end do
        !$omp end do
 
        ! Ensure buffers are empty at the end of the loop
-       call handle_buffer(self, buffer, events, 0)
+       call handle_buffer(self, buffer, 0)
 
        ! Ensure all particles have been added before the test below
        !$omp barrier
