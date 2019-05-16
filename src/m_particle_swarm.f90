@@ -21,6 +21,12 @@ module m_particle_swarm
   integer, parameter :: ix_vel       = 5
   integer, parameter :: ix_vel_sq    = 6
 
+  !> Indices of ionization collisions
+  integer, allocatable :: ionization_colls(:)
+
+  !> Indices of attachment collisions
+  integer, allocatable :: attachment_colls(:)
+
   !> Type for storing transport data
   type SWARM_td_t
      character(len=20)     :: description    !< Description
@@ -73,12 +79,15 @@ module m_particle_swarm
 
 contains
 
-  subroutine swarm_initialize(cfg, tds, field)
+  subroutine swarm_initialize(pc, cfg, tds, field)
     use m_config
-    type(CFG_t), intent(in)         :: cfg
+    use m_cross_sec
+    type(PC_t), intent(in)          :: pc
+    type(CFG_t), intent(inout)      :: cfg
     type(SWARM_td_t), intent(inout) :: tds(:)
     type(SWARM_field_t), intent(in) :: field
     real(dp)                        :: rel_abs_acc(2)
+    integer                         :: n, i_i, i_a
 
     SWARM_field = field
 
@@ -106,6 +115,24 @@ contains
     tds(ix_alpha)%rel_acc = rel_abs_acc(1)
     tds(ix_alpha)%abs_acc = rel_abs_acc(2)
 
+    ! Get indices of all ionization and attachment collisions
+    n = count(pc%colls(1:pc%n_colls)%type == CS_ionize_t)
+    allocate(ionization_colls(n))
+    n = count(pc%colls(1:pc%n_colls)%type == CS_attach_t)
+    allocate(attachment_colls(n))
+
+    i_i = 0
+    i_a = 0
+
+    do n = 1, pc%n_colls
+       if (pc%colls(n)%type == CS_ionize_t) then
+          i_i = i_i + 1
+          ionization_colls(i_i) = n
+       else if (pc%colls(n)%type == CS_ionize_t) then
+          i_a = i_a + 1
+          attachment_colls(i_a) = n
+       end if
+    end do
   end subroutine swarm_initialize
 
   subroutine init_td(td, n_dim, description)
@@ -126,9 +153,8 @@ contains
   end subroutine init_td
 
   !> Advance a swarm over time
-  subroutine swarm_advance(pc, events, tau, desired_num_part, growth_rate)
+  subroutine swarm_advance(pc, tau, desired_num_part, growth_rate)
     type(PC_t), intent(inout)        :: pc
-    type(PC_events_t), intent(inout) :: events
     real(dp), intent(in)             :: tau
     integer, intent(in)              :: desired_num_part
     real(dp), intent(in)             :: growth_rate
@@ -251,9 +277,9 @@ contains
        call pc%get_coll_rates(sqrt(sum(v2)), coll_rates(1:pc%n_colls))
        ps%coll_rate = ps%coll_rate + (sum(coll_rates(1:pc%n_colls)) - &
             ps%coll_rate) * inv_n_samples
-       ps%i_rate = ps%i_rate + (sum(coll_rates(pc%ionization_colls)) - &
+       ps%i_rate = ps%i_rate + (sum(coll_rates(ionization_colls)) - &
             ps%i_rate) * inv_n_samples
-       ps%a_rate = ps%a_rate + (sum(coll_rates(pc%attachment_colls)) - &
+       ps%a_rate = ps%a_rate + (sum(coll_rates(attachment_colls)) - &
             ps%a_rate) * inv_n_samples
     end do
   end subroutine update_particle_stats
@@ -645,8 +671,9 @@ contains
 
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant electric and magnetic field, using the analytic solution.
-  subroutine SWARM_particle_mover_analytic(part, dt)
+  subroutine SWARM_particle_mover_analytic(self, part, dt)
     use m_units_constants
+    class(PC_t), intent(in)        :: self
     type(PC_part_t), intent(inout) :: part
     real(dp), intent(in)           :: dt
     real(dp)                       :: rc(3), rc_rot(3), theta
@@ -683,8 +710,9 @@ contains
 
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant electric and magnetic field, using the analytic solution.
-  subroutine SWARM_particle_mover_simple(part, dt)
+  subroutine SWARM_particle_mover_simple(self, part, dt)
     use m_units_constants
+    class(PC_t), intent(in)        :: self
     type(PC_part_t), intent(inout) :: part
     real(dp), intent(in)           :: dt
     real(dp)                       :: a(3)
@@ -706,8 +734,9 @@ contains
 
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant electric and magnetic field, using Boris' method.
-  subroutine SWARM_particle_mover_boris(part, dt)
+  subroutine SWARM_particle_mover_boris(self, part, dt)
     use m_units_constants
+    class(PC_t), intent(in)        :: self
     type(PC_part_t), intent(inout) :: part
     real(dp), intent(in)           :: dt
     real(dp) :: t_vec(3), tmp(3)

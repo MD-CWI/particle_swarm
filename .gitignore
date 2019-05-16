@@ -1,3 +1,4 @@
 /src/*.o
 /src/*.mod
-./particle_swarm
+/output/*
+/particle_swarm

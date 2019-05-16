@@ -20,7 +20,7 @@ program particle_swarm
   if (.not. dry_run) then
      call get_field_configuration(cfg, field)
      call CFG_get(cfg, "swarm_size", swarm_size)
-     call SWARM_initialize(cfg, td, field)
+     call SWARM_initialize(pc, cfg, td, field)
 
      if (visualize_only) then
         call SWARM_visualize(pc, swarm_size, cfg)
@@ -124,8 +124,8 @@ contains
           max_num_part = 8 * swarm_size
        end if
 
-       call pc%initialize(UC_elec_mass, cross_secs, &
-            tbl_size, max_ev, max_num_part, rng_seed)
+       call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
+       call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
 
        print *, "--------------------"
        print *, "Gas information"
@@ -267,7 +267,7 @@ contains
 
   subroutine get_field_configuration(cfg, field)
     use m_units_constants
-    type(CFG_t), intent(in)            :: cfg
+    type(CFG_t), intent(inout)         :: cfg
     type(SWARM_field_t), intent(inout) :: field
     real(dp)                           :: electric_field, degrees
 
