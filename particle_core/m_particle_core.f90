@@ -333,8 +333,12 @@ contains
     open(newunit=my_unit, file=trim(param_file), form='UNFORMATTED', &
          access='STREAM', status='OLD')
 
-    read(my_unit) n_part_max, self%n_colls
-    read(my_unit) self%mass, self%max_rate
+    read(my_unit) n_part_max
+    read(my_unit) self%n_colls
+    allocate(self%coll_is_event(self%n_colls))
+    read(my_unit) self%coll_is_event
+    read(my_unit) self%mass
+    read(my_unit) self%max_rate
     allocate(self%colls(self%n_colls))
     read(my_unit) self%colls
 
@@ -362,8 +366,11 @@ contains
 
     open(newunit=my_unit, file=trim(param_file), form='UNFORMATTED', &
          access='STREAM', status='REPLACE')
-    write(my_unit) size(self%particles), self%n_colls
-    write(my_unit) self%mass, self%max_rate
+    write(my_unit) size(self%particles)
+    write(my_unit) self%n_colls
+    write(my_unit) self%coll_is_event
+    write(my_unit) self%mass
+    write(my_unit) self%max_rate
     write(my_unit) self%colls
     close(my_unit)
 
