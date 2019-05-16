@@ -101,6 +101,7 @@ def create_swarm_cfg(tmpdir, args):
     f.write('output_dir = ' + tmpdir + '\n')
     f.write('gas_file = ' + args.cs + '\n')
     f.write('swarm_name = swarm_cli\n')
+    f.write('num_threads = 1\n')
     f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
     f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
     f.write('gas_pressure = ' + str(args.p) + '\n')
