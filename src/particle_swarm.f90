@@ -190,7 +190,9 @@ contains
     call CFG_add(cfg, "visualize_rotate_Ez", .false., &
          "Rotate results so that E points in the z-direction")
     call CFG_add(cfg, "visualize_init_v0", [0.0_dp, 0.0_dp, 0.0_dp], &
-         "Initial velocity of particles")
+         "Initial velocity of particles (if relax_swarm is false)")
+    call CFG_add(cfg, "visualize_relax_swarm", .true., &
+         "If true, relax the swarm first")
 
     ! Settings for visualization
     call CFG_add(cfg, "visualize_end_time", 1e-9_dp, &

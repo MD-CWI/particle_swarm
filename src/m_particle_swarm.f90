@@ -354,15 +354,16 @@ contains
     type(CFG_t), intent(inout) :: cfg
     character(len=200)         :: base_name
     integer                    :: n, n_steps
-    real(dp)                   :: t_end, dt_output, t
+    real(dp)                   :: t_end, dt_output, t, tau_coll
     real(dp)                   :: v0(3), rotmat(2,2)
-    logical                    :: rotate
+    logical                    :: rotate, relax_swarm
 
     call CFG_get(cfg, "visualize_end_time", t_end)
     call CFG_get(cfg, "visualize_dt_output", dt_output)
     call CFG_get(cfg, "visualize_base_name", base_name)
     call CFG_get(cfg, "visualize_rotate_Ez", rotate)
     call CFG_get(cfg, "visualize_init_v0", v0)
+    call CFG_get(cfg, "visualize_relax_swarm", relax_swarm)
 
     n_steps = nint(t_end/dt_output)
 
@@ -382,7 +383,12 @@ contains
        rotmat(:, 2) = [0.0_dp, 1.0_dp]
     end if
 
-    call new_swarm(pc, swarm_size, init_v0=v0)
+    if (relax_swarm) then
+       call create_swarm(pc, tau_coll, swarm_size)
+    else
+       call new_swarm(pc, swarm_size, init_v0=v0)
+    end if
+
     call write_particles(pc, trim(base_name), 0.0_dp, 0, rotmat)
 
     do n = 1, n_steps
