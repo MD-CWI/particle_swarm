@@ -583,6 +583,7 @@ contains
 
     do
        n_hi = self%n_part
+       !$omp barrier
        !$omp do
        do n = n_lo, n_hi
           call self%move_and_collide(n, prng%rngs(tid), buffer)
