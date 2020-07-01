@@ -103,6 +103,9 @@ module m_particle_core
      !> Whether a collision should be stored as an event
      logical, allocatable         :: coll_is_event(:)
 
+     !> Collision ledger, array containing occurences of specific collisions
+     real(dp), allocatable        :: coll_ledger(:)
+
      !> Lookup table with collision rates
      type(LT_t)                   :: rate_lt
      real(dp)                     :: max_rate, inv_max_rate
@@ -649,6 +652,11 @@ contains
               new_vel, rng%unif_01())
 
          if (cIx > 0) then
+           ! Add reaction to the ledger
+           !$omp critical
+           self%coll_ledger(cIx) = self%coll_ledger(cIx) + part%w
+           !$omp end critical
+
             ! Perform the corresponding collision
             cType    = self%colls(cIx)%type
 
@@ -669,6 +677,7 @@ contains
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
             case default
+              ! Note: energy loss of particle due to attachment should be handled as an event
                error stop "Wrong collision type"
             end select
 
@@ -1197,6 +1206,9 @@ contains
     n_colls      = size(cross_secs)
     self%n_colls = n_colls
     allocate(self%colls(n_colls))
+    allocate(self%coll_ledger(self%n_colls))
+    self%coll_ledger = 0.0_dp
+
     allocate(self%coll_is_event(n_colls))
     self%coll_is_event(:) = .false.
 

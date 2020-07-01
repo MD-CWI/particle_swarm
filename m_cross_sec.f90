@@ -62,6 +62,7 @@ module m_cross_sec
   ! Methods
   public :: CS_add_from_file
   public :: CS_write_summary
+  public :: CS_write_ledger
 
 contains
 
@@ -362,5 +363,31 @@ contains
     error stop
 
   end subroutine CS_write_summary
+
+  subroutine CS_write_ledger(coll_ledger, filename)
+    ! use iso_fortran_env, only: error_unit
+    real(dp), intent(in)          :: coll_ledger(:)
+    character(LEN=*), intent(in) :: filename
+    integer                      :: io_state, my_unit
+
+    my_unit = 333
+
+! if exisits do header
+
+    open(my_unit, FILE = trim(filename), ACTION = "WRITE", position = "append")!, &
+         ! ERR = 998, IOSTAT = io_state)
+    write(my_unit, *) coll_ledger
+    close(my_unit, STATUS = "KEEP")!, ERR = 999, IOSTAT = io_state)
+  ! 998 continue ! If there was an error, the routine will end here
+  !     write(error_unit, *) " AAAA CS_write_ledger error, io_state = ", io_state, &
+  !          " while opening ", trim(filename)
+  !     error stop
+  ! 999 continue ! If there was an error, the routine will end here
+  !     write(error_unit, *) "BBBBB CS_write_ledger error, io_state = ", io_state, &
+  !          " while writing to ", trim(filename)
+  !     error stop
+
+  end subroutine CS_write_ledger
+
 
 end module m_cross_sec
