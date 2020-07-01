@@ -54,6 +54,7 @@ module m_particle_core
      real(dp) :: a(3)   = 0 !< Acceleration
      real(dp) :: w      = 0 !< Weight
      real(dp) :: t_left = 0 !< Propagation time left
+     real(dp) :: en_loss  = 0 !< Energy loss since previous time step
   end type PC_part_t
 
   !> An event (particle collision)
@@ -765,6 +766,9 @@ contains
     type(CS_coll_t), intent(in)    :: coll
     type(RNG_t), intent(inout)     :: rng
     real(dp)                       :: bg_vel(3), com_vel(3)
+    real(dp)                       :: v_in(3), v_out(3), en_diff
+
+    v_in = part_in%v
 
     ! TODO: implement random bg velocity
     bg_vel      = 0.0_dp
@@ -778,6 +782,11 @@ contains
     part_out(1)%v = part_out(1)%v - com_vel
     call scatter_isotropic(part_out(1), norm2(part_out(1)%v), rng)
     part_out(1)%v = part_out(1)%v + com_vel
+
+    ! Calculate energy dissipation
+    v_out = part_out(1)%v
+    en_diff = PC_v_to_en(v_in, coll%part_mass) - PC_v_to_en(v_out, coll%part_mass)
+    part_out%en_loss = part_out%en_loss + abs(en_diff)
   end subroutine elastic_collision
 
   !> Perform an excitation-collision for particle 'll'
@@ -798,6 +807,9 @@ contains
     n_part_out  = 1
     part_out(1) = part_in
     call scatter_isotropic(part_out(1), new_vel, rng)
+
+    ! Calculate energy dissipation
+    part_out%en_loss = part_out%en_loss + abs(old_en - energy)
   end subroutine excite_collision
 
   !> Perform an ionizing collision for particle 'll'
@@ -819,6 +831,10 @@ contains
     part_out(2) = part_in
     call scatter_isotropic(part_out(1), velocity, rng)
     call scatter_isotropic(part_out(2), velocity, rng)
+
+    ! Calculate energy dissipation
+    part_out(1)%en_loss = part_out(1)%en_loss + abs(old_en - energy)
+    part_out(2)%en_loss = 0.0_dp ! Ensure that en_loss from previous collisions is not copied
   end subroutine ionization_collision
 
   subroutine scatter_isotropic(part, vel_norm, rng)
