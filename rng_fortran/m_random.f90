@@ -27,6 +27,7 @@ module m_random
      procedure, non_overridable :: int_8       ! 8-byte random integer
      procedure, non_overridable :: unif_01     ! Uniform (0,1] real
      procedure, non_overridable :: two_normals ! Two normal(0,1) samples
+     procedure, non_overridable :: three_normals ! Three normal(0,1) samples
      procedure, non_overridable :: poisson     ! Sample from Poisson-dist.
      procedure, non_overridable :: circle      ! Sample on a circle
      procedure, non_overridable :: sphere      ! Sample on a sphere
@@ -172,6 +173,21 @@ contains
     end do
     rands = rands * sqrt(-2 * log(sum_sq) / sum_sq)
   end function two_normals
+
+  !> A straightforward extension of function "two_normals"
+  function three_normals(self) result(rands)
+    class(rng_t), intent(inout) :: self
+    real(dp)                    :: rands(3), sum_sq
+
+    do
+       rands(1) = 2 * self%unif_01() - 1
+       rands(2) = 2 * self%unif_01() - 1
+       rands(3) = 2 * self%unif_01() - 1
+       sum_sq = sum(rands**2)
+       if (sum_sq < 1.0_dp .and. sum_sq > 0.0_dp) exit
+    end do
+    rands = rands * sqrt(-2 * log(sum_sq) / sum_sq)
+  end function three_normals
 
   !> Return Poisson random variate with rate lambda. Works well for lambda < 30
   !> or so. For lambda >> 1 it can produce wrong results due to roundoff error.
