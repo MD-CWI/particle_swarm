@@ -59,9 +59,9 @@ module m_particle_core
 
   !> An event (particle collision)
   type, public :: PC_event_t
-     type(PC_part_t) :: part  !< Particle that had collision
-     integer         :: cix   !< Collision index
-     integer         :: ctype !< Collision type
+     type(PC_part_t)         :: part     !< Particle that had collision
+     integer                 :: cix       !< Collision index
+     integer                 :: ctype     !< Collision type
   end type PC_event_t
 
   !> Particle buffer for parallel simulations

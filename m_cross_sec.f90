@@ -29,6 +29,7 @@ module m_cross_sec
      real(dp) :: part_mass  = 0
      real(dp) :: rel_mass   = 0
      real(dp) :: en_loss    = 0
+     character(LEN=tiny_len) :: gas_name      ! Name of the colliding neutral molecule
   end type CS_coll_t
 
   !> The type of cross section table
@@ -168,6 +169,7 @@ contains
 
        cs_buf(cIx)%coll%type = col_type
        cs_buf(cIx)%coll%part_mass = UC_elec_mass
+       cs_buf(cIx)%coll%gas_name = gas_name
 
        select case(col_type)
        case (CS_elastic_t)

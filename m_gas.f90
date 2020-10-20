@@ -56,7 +56,7 @@ contains
     GAS_number_dens = 1.0D5 * GAS_pressure / &
          (UC_boltzmann_const * GAS_temperature)
     
-    ! Tell that GAS is initialized 
+    ! Tell that GAS is initialized
     GAS_initialized = .true.
   end subroutine GAS_initialize
 
