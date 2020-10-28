@@ -29,7 +29,7 @@ module m_cross_sec
      real(dp) :: part_mass  = 0
      real(dp) :: rel_mass   = 0
      real(dp) :: en_loss    = 0
-     character(LEN=tiny_len) :: gas_name      ! Name of the colliding neutral molecule
+     integer  :: gas_name   = 0 ! Possible flag for the neutral molecule
   end type CS_coll_t
 
   !> The type of cross section table
@@ -49,6 +49,8 @@ module m_cross_sec
   integer, parameter, public :: CS_excite_t  = 3
   integer, parameter, public :: CS_ionize_t  = 4
   integer, parameter, public :: CS_num_types = 4
+
+  integer, parameter, public :: CS_is_CH4 = 1
 
   !> Maximum number of cross sections per gas
   integer, parameter :: max_processes_per_gas = 200
@@ -169,7 +171,7 @@ contains
 
        cs_buf(cIx)%coll%type = col_type
        cs_buf(cIx)%coll%part_mass = UC_elec_mass
-       cs_buf(cIx)%coll%gas_name = gas_name
+       if (gas_name == "CH4") cs_buf(cIx)%coll%gas_name = CS_is_CH4
 
        select case(col_type)
        case (CS_elastic_t)
