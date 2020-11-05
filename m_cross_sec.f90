@@ -449,7 +449,7 @@ contains
           ERR = 998, IOSTAT = io_state)
 
     do ii = 1, size(coll_ledger)
-      write(my_unit, '(ES24.17)', advance = 'no') coll_ledger(ii)
+      write(my_unit, '(E13.6)', advance = 'no') coll_ledger(ii)
     end do
     write(my_unit, *) timestamp
     close(my_unit, STATUS = "KEEP", ERR = 999, IOSTAT = io_state)
