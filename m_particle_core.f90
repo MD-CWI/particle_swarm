@@ -593,6 +593,8 @@ contains
     tid     = omp_get_thread_num() + 1
     n_lo    = 1
 
+    coll_ledger_incr = 0.0_dp
+
     do
        n_hi = self%n_part
        !$omp barrier
