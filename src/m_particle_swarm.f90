@@ -224,6 +224,7 @@ contains
        end do
     else if (new_size < cur_size/2) then
        ! Reduce number of particles
+       ! TODO: 'stratified' removal, to keep EEDF similar?
        chance = new_size / real(cur_size, dp)
        do ix = 1, cur_size
           if (pc%rng%unif_01() > chance) call pc%remove_part(ix)
@@ -459,6 +460,7 @@ contains
     real(dp), parameter :: fac          = 0.5 * UC_elec_mass/UC_elem_charge
     integer             :: n_coll_times
     integer             :: n, n_swarms
+    logical             :: converged
     real(dp)            :: tau_coll
     real(dp)            :: growth_rate
     type(part_stats_t)  :: ps
@@ -489,7 +491,8 @@ contains
 
        if (n_swarms >= n_swarms_min) then
           ! Check whether the results are accurate enough
-          if (check_accuracy(tds)) exit
+          call check_convergence(tds, converged)
+          if (converged) exit
        end if
 
        ! Advance over several collisions for the diffusion measurements
@@ -507,12 +510,13 @@ contains
 
   !> Check whether the transport data td with estimated deviation dev is
   !> accurate enough according to the requirements in acc
-  logical function check_accuracy(tds)
+  subroutine check_convergence(tds, converged)
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
+    logical, intent(out)         :: converged
     real(dp)                     :: stddev, mean, var
     integer                      :: i, n
 
-    check_accuracy = .true.
+    converged = .true.
 
     do i = 1, SWARM_num_td
        ! Below we use the norm for vector-based transport data, so that
@@ -523,11 +527,11 @@ contains
        stddev = sqrt(var)                     ! Standard deviation of the mean
 
        if (stddev > tds(i)%rel_acc * mean .and. stddev > tds(i)%abs_acc) then
-          check_accuracy = .false.
+          converged = .false.
           exit
        end if
     end do
-  end function check_accuracy
+  end subroutine check_convergence
 
   ! Create a swarm that is relaxed to the electric field
   subroutine create_swarm(pc, tau_coll, swarm_size)
