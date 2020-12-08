@@ -73,39 +73,14 @@ if __name__ == '__main__':
     td = np.loadtxt(args.in_file)
 
     ix_E = colnames.index('E')
-    ix_angle = colnames.index('angle')
-    angles = np.unique(td[:, ix_angle])
-    n_fields = td.shape[0] // len(angles)
-    n_angles = len(angles)
+    n_fields = td.shape[0]
 
-    # There should only be one magnetic field
-    ix_B = colnames.index('B')
-
-    if not args.magnetic:
-        if not np.allclose(td[:, ix_B], 0.0):
-            sys.exit("Error: non-zero B-field present (try -magnetic)")
-        if not np.allclose(td[:, ix_angle], 0.0):
-            sys.exit("Error: non-zero angle between E,B was used (try -magnetic)")
-        if n_angles > 1:
-            sys.exit("Error: multiple angles used (try -magnetic)")
-    elif not np.allclose(td[:, ix_B], td[0, ix_B]):
-            sys.exit("Error: more than one B-field present. "
-                     "This script works for varying angles.")
-
-    if args.magnetic:
-        write_col('mu_B', 'muB[m2/Vs]', multicol=True)
-        write_col('mu_xB', 'muxB[m2/Vs]', multicol=True)
-        write_col('mu_ExB', 'muExB[m2/Vs]', multicol=True)
-        write_col('alpha', 'alpha[1/m]', multicol=True)
-        write_col('eta', 'eta[1/m]', multicol=True)
-        # Take the diffusion coefficient perpendicular to E and B
-        write_col('diff_1', 'diff_xB[m2/s]', multicol=True)
-        write_col('diff_3', 'diff_B[m2/s]', multicol=True)
-        write_col('energy', 'energy[eV]', multicol=True)
-    else:
-        write_col('mu_B', 'mu[m2/Vs]')
-        write_col('alpha', 'alpha[1/m]')
-        write_col('eta', 'eta[1/m]')
-        write_col('diff_3', 'diffL[m2/s]')
-        write_col('diff_1', 'diffT[m2/s]')
-        write_col('energy', 'energy[eV]')
+    write_col('mu_flux', 'mu[m2/Vs]')
+    write_col('mu_bulk', 'mu_bulk[m2/Vs]')
+    write_col('alpha', 'alpha[1/m]')
+    write_col('eta', 'eta[1/m]')
+    write_col('flux_D_z', 'diffL[m2/s]')
+    write_col('flux_D_x', 'diffT[m2/s]')
+    write_col('bulk_D_z', 'diffL_bulk[m2/s]')
+    write_col('bulk_D_x', 'diffT_bulk[m2/s]')
+    write_col('energy', 'energy[eV]')

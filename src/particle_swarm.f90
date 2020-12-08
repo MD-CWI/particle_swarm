@@ -9,10 +9,11 @@ program particle_swarm
   integer, parameter  :: dp = kind(0.0d0)
   type(CFG_t)         :: cfg
   character(len=80)   :: swarm_name
-  integer             :: swarm_size
+  integer             :: swarm_size, verbose
   type(PC_t)          :: pc    ! Particle data
   type(SWARM_field_t) :: field ! The field configuration
   type(SWARM_td_t)    :: td(SWARM_num_td)
+  real(dp)            :: max_cpu_time
   logical             :: dry_run, visualize_only
 
   call initialize_all(cfg)
@@ -25,8 +26,8 @@ program particle_swarm
      if (visualize_only) then
         call SWARM_visualize(pc, swarm_size, cfg)
      else
-        call SWARM_get_data(pc, swarm_size, td)
-        call SWARM_print_results(td)
+        call SWARM_get_data(pc, swarm_size, td, verbose, max_cpu_time)
+        call SWARM_print_results(td, verbose)
      end if
   end if
 
@@ -57,6 +58,8 @@ contains
 
     call CFG_update_from_arguments(cfg)
     call CFG_get(cfg, "swarm_name", swarm_name)
+    call CFG_get(cfg, "verbose", verbose)
+    call CFG_get(cfg, "max_cpu_time", max_cpu_time)
 
     call CFG_get(cfg, "num_threads", num_threads)
     if (num_threads > 0) then
@@ -86,7 +89,7 @@ contains
 
     if (.not. consecutive_run) then
        tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_config.txt"
-       print *, "Writing configuration to ", trim(tmp_name)
+       if (verbose > 0) print *, "Writing configuration to ", trim(tmp_name)
        call CFG_write(cfg, trim(tmp_name))
 
        call CFG_get(cfg, "gas_file", cs_file)
@@ -118,29 +121,34 @@ contains
        call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
        call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
 
-       print *, "--------------------"
-       print *, "Gas information"
-       write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
-       print *, ""
-       print *, "Component - fraction"
-       do nn = 1, n_gas_comp
-          write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
-               gas_fracs(nn)
-       end do
-       print *, ""
+       if (verbose > 0) then
+          print *, "--------------------"
+          print *, "Gas information"
+          write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
+          print *, ""
+          print *, "Component - fraction"
+          do nn = 1, n_gas_comp
+             write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
+                  gas_fracs(nn)
+          end do
+          print *, ""
+       end if
 
        tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_coeffs.txt"
-       print *, "Writing colrate table (as text) to ", trim(tmp_name)
+       if (verbose > 0) &
+            print *, "Writing colrate table (as text) to ", trim(tmp_name)
        call IO_write_coeffs(pc, trim(tmp_name))
 
        tmp_name = trim(output_dir) // "/" // trim(swarm_name)
-       print *, "Writing particle params (raw) to ", &
-            trim(tmp_name) // "_params.dat"
-       print *, "Writing particle lookup table (raw) to ", &
-            trim(tmp_name) // "_lt.dat"
+       if (verbose > 0)then
+          print *, "Writing particle params (raw) to ", &
+               trim(tmp_name) // "_params.dat"
+          print *, "Writing particle lookup table (raw) to ", &
+               trim(tmp_name) // "_lt.dat"
+       end if
        call pc%to_file(trim(tmp_name) // "_params.dat", &
             trim(tmp_name) // "_lt.dat")
-       print *, "--------------------"
+       if (verbose > 0) print *, "--------------------"
 
     else ! Restarted run (can only change field!)
        tmp_name = trim(output_dir) // "/" // trim(swarm_name)
@@ -177,6 +185,10 @@ contains
   subroutine create_sim_config(cfg)
     type(CFG_t), intent(inout) :: cfg
 
+    call CFG_add(cfg, "verbose", 0, &
+         "Verbosity of program (higher values generate more output)")
+    call CFG_add(cfg, "max_cpu_time", 3600.0_dp, &
+         "Maximum CPU run time (in seconds)")
     call CFG_add(cfg, "num_threads", -1, &
          "Number of OpenMP threads to use (default: all)")
     call CFG_add(cfg, "consecutive_run", .false., &
@@ -222,7 +234,7 @@ contains
          "The required rel/abs accuracy of the velocity")
     call CFG_add(cfg, "acc_diffusion", [1.0e-2_dp, 0.0_dp], &
          "The required rel/abs accuracy of the diffusion coeff.")
-    call CFG_add(cfg, "acc_alpha", [5.0e-3_dp, 0.0_dp], &
+    call CFG_add(cfg, "acc_alpha", [5.0e-3_dp, 1.0e1_dp], &
          "The required rel/abs accuracy of the ionization coeff.")
 
     ! Gas parameters
