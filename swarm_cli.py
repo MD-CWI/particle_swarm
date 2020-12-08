@@ -44,6 +44,8 @@ def get_args():
                         default='analytic', help='Choice of particle mover')
     parser.add_argument('-eV_max', type=float, default=500.0,
                         help='Maximum particle energy in eV')
+    parser.add_argument('-max_cpu_time', type=float, default=600.0,
+                        help='Maximum CPU time per swarm')
 
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-E', type=float,
@@ -116,6 +118,7 @@ def create_swarm_cfg(tmpdir, args):
     f.write('magnetic_field = ' + str(args.B_range[0]) + '\n')
     f.write('field_angle_degrees = ' + str(args.angle_range[0]) + '\n')
     f.write('particle_max_energy_ev = ' + str(args.eV_max) + '\n')
+    f.write('max_cpu_time = ' + str(args.max_cpu_time) + '\n')
     f.write('particle_mover = ' + args.mover + '\n')
     f.close()
     return fname
@@ -303,9 +306,9 @@ if __name__ == '__main__':
             # Format is name = value stddev
             # line.split()[2] corresponds to 'value'
             # line.split()[3] corresponds to 'stddev'
-            td_matrix[i, j] = line.split()[2]
+            td_matrix[i, j] = line.split()[1]
             if args.sigma:
-                td_matrix[i, j + n_cols] = line.split()[3]
+                td_matrix[i, j + n_cols] = line.split()[2]
 
     # Fix mobilities for specific angles (where they are undefined)
     if (len(angle_list) > 3):
