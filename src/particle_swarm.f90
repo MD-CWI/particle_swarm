@@ -13,6 +13,7 @@ program particle_swarm
   type(PC_t)          :: pc    ! Particle data
   type(SWARM_field_t) :: field ! The field configuration
   type(SWARM_td_t)    :: td(SWARM_num_td)
+  real(dp)            :: max_cpu_time
   logical             :: dry_run, visualize_only
 
   call initialize_all(cfg)
@@ -25,7 +26,7 @@ program particle_swarm
      if (visualize_only) then
         call SWARM_visualize(pc, swarm_size, cfg)
      else
-        call SWARM_get_data(pc, swarm_size, td, verbose)
+        call SWARM_get_data(pc, swarm_size, td, verbose, max_cpu_time)
         call SWARM_print_results(td, verbose)
      end if
   end if
@@ -58,6 +59,7 @@ contains
     call CFG_update_from_arguments(cfg)
     call CFG_get(cfg, "swarm_name", swarm_name)
     call CFG_get(cfg, "verbose", verbose)
+    call CFG_get(cfg, "max_cpu_time", max_cpu_time)
 
     call CFG_get(cfg, "num_threads", num_threads)
     if (num_threads > 0) then
@@ -185,6 +187,8 @@ contains
 
     call CFG_add(cfg, "verbose", 0, &
          "Verbosity of program (higher values generate more output)")
+    call CFG_add(cfg, "max_cpu_time", 3600.0_dp, &
+         "Maximum CPU run time (in seconds)")
     call CFG_add(cfg, "num_threads", -1, &
          "Number of OpenMP threads to use (default: all)")
     call CFG_add(cfg, "consecutive_run", .false., &

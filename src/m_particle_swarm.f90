@@ -406,7 +406,7 @@ contains
     integer, intent(in)        :: swarm_size
     type(CFG_t), intent(inout) :: cfg
     character(len=200)         :: base_name
-    integer                    :: n, n_steps
+    integer                    :: n, n_steps, verbose
     real(dp)                   :: t_end, dt_output, t
     real(dp)                   :: v0(3), rotmat(2,2), mean_x(3)
     logical                    :: rotate, relax_swarm
@@ -418,6 +418,7 @@ contains
     call CFG_get(cfg, "visualize_rotate_Ez", rotate)
     call CFG_get(cfg, "visualize_init_v0", v0)
     call CFG_get(cfg, "visualize_relax_swarm", relax_swarm)
+    call CFG_get(cfg, "verbose", verbose)
 
     n_steps = nint(t_end/dt_output)
 
@@ -438,7 +439,7 @@ contains
     end if
 
     if (relax_swarm) then
-       call create_swarm(pc, ps, swarm_size)
+       call create_swarm(pc, ps, swarm_size, verbose)
        call recenter_swarm(pc, mean_x)
     else
        call new_swarm(pc, swarm_size, init_v0=v0)
@@ -501,7 +502,7 @@ contains
 
   end subroutine write_particles
 
-  subroutine SWARM_get_data(pc, swarm_size, tds, verbose)
+  subroutine SWARM_get_data(pc, swarm_size, tds, verbose, max_cpu_time)
     use iso_fortran_env, only: error_unit
     use m_units_constants
 
@@ -509,6 +510,7 @@ contains
     integer, intent(in)             :: swarm_size
     type(SWARM_td_t), intent(inout) :: tds(:)
     integer, intent(in)             :: verbose
+    real(dp), intent(in)            :: max_cpu_time
 
     integer, parameter  :: n_swarms_min = 10
     integer, parameter  :: n_swarms_max = 10000
@@ -516,10 +518,12 @@ contains
     integer             :: n_measurements
     integer             :: n, n_swarms, imax(1)
     real(dp)            :: dt, t_relax, t_measure, growth_rate
-    real(dp)            :: rel_error(SWARM_num_td)
+    real(dp)            :: rel_error(SWARM_num_td), t0, t1
     type(part_stats_t)  :: ps
 
-    call create_swarm(pc, ps, swarm_size)
+    call create_swarm(pc, ps, swarm_size, verbose)
+
+    call cpu_time(t0)
 
     ! Loop over the swarms until converged
     do n_swarms = 1, n_swarms_max
@@ -558,7 +562,9 @@ contains
              write(*, '(I6,A35,F12.4)') n_swarms, 'max rel. error (' // &
                   trim(tds(imax(1))%description) // ')', rel_error(imax(1))
           end if
-          if (all(rel_error < 1.0_dp)) exit
+
+          call cpu_time(t1)
+          if (all(rel_error < 1.0_dp) .or. t1 - t0 > max_cpu_time) exit
        end if
     end do
 
@@ -591,7 +597,7 @@ contains
   end subroutine get_accuracy
 
   ! Create a swarm that is relaxed to the electric field
-  subroutine create_swarm(pc, ps, swarm_size)
+  subroutine create_swarm(pc, ps, swarm_size, verbose)
     use m_units_constants
     !> Data type which stores particle model
     type(PC_t), intent(inout)       :: pc
@@ -599,6 +605,7 @@ contains
     type(part_stats_t), intent(out) :: ps
     !> Number of electrons in swarm
     integer, intent(in)             :: swarm_size
+    integer, intent(in)             :: verbose
 
     integer, parameter    :: frame_size    = 100
     real(dp), parameter   :: en_eV         = 0.1_dp
@@ -616,6 +623,7 @@ contains
     ! when the swarm is approximately relaxed to the background field.
     tau = sqrt(0.5_dp * en_eV * UC_elec_mass / UC_elem_charge) / &
          norm2(SWARM_field%E_vec)
+    if (verbose > 1) print *, "dt for energy relaxation", tau
 
     ! Create linear table with unit variance and zero mean
     do i = 1, frame_size
@@ -639,7 +647,7 @@ contains
 
        ! Compute correlation between en_hist and a line
        correl = sum((en_hist - mean_en) * t_hist) / (frame_size * stddev)
-
+       if (verbose > 1) print *, cntr, "energy correlation", correl
        ! If the correlation is sufficiently small, exit
        if (cntr > min_its_relax .and. abs(correl) < 0.25_dp) exit
     end do
