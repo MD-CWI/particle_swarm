@@ -25,8 +25,6 @@ def get_args():
         epilog='''Usage example: ./swarm_to_lfa.py table.txt AIR > lfa_data.txt''')
     parser.add_argument('in_file', type=argparse.FileType('r'),
                         help='File with output from swarm_cli')
-    parser.add_argument('gas_name', type=str,
-                        help='Gas mixture name (e.g., AIR)')
     parser.add_argument('-magnetic', action='store_true',
                         help='Use local field approximation with B-field')
     return parser.parse_args()
@@ -35,8 +33,7 @@ def get_args():
 def write_col(varname, name, multicol=False):
     ix_col = colnames.index(varname)
 
-    print("E[V/m]_" + name)
-    print(args.gas_name)
+    print("efield[V/m]_" + name)
     if multicol:
         print("NUM_COLUMNS: ", n_angles)
         print("COL_VALUES: ", ' '.join(map(str, angles)))
@@ -79,8 +76,8 @@ if __name__ == '__main__':
     write_col('mu_bulk', 'mu_bulk[m2/Vs]')
     write_col('alpha', 'alpha[1/m]')
     write_col('eta', 'eta[1/m]')
-    write_col('flux_D_z', 'diffL[m2/s]')
-    write_col('flux_D_x', 'diffT[m2/s]')
-    write_col('bulk_D_z', 'diffL_bulk[m2/s]')
-    write_col('bulk_D_x', 'diffT_bulk[m2/s]')
+    write_col('flux_D_z', 'dif[m2/s]')
+    write_col('flux_D_x', 'difT[m2/s]')
+    write_col('bulk_D_z', 'dif_bulk[m2/s]')
+    write_col('bulk_D_x', 'difT_bulk[m2/s]')
     write_col('energy', 'energy[eV]')
