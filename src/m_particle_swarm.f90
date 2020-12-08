@@ -491,21 +491,22 @@ contains
 
   end subroutine write_particles
 
-  subroutine SWARM_get_data(pc, swarm_size, tds)
+  subroutine SWARM_get_data(pc, swarm_size, tds, verbose)
     use iso_fortran_env, only: error_unit
     use m_units_constants
 
     type(PC_t), intent(inout)       :: pc
     integer, intent(in)             :: swarm_size
     type(SWARM_td_t), intent(inout) :: tds(:)
+    integer, intent(in)             :: verbose
 
     integer, parameter  :: n_swarms_min = 10
     integer, parameter  :: n_swarms_max = 10000
     real(dp), parameter :: fac          = 0.5 * UC_elec_mass/UC_elem_charge
     integer             :: n_measurements
-    integer             :: n, n_swarms
+    integer             :: n, n_swarms, imax(1)
     real(dp)            :: dt, t_relax, t_measure, growth_rate
-    real(dp)            :: rel_accuracy(SWARM_num_td)
+    real(dp)            :: rel_error(SWARM_num_td)
     type(part_stats_t)  :: ps
 
     call create_swarm(pc, ps, swarm_size)
@@ -536,12 +537,18 @@ contains
        end do
 
        call update_td_from_ps(tds, ps)
-       call SWARM_print_results(tds)
+
+       if (verbose > 1) call SWARM_print_results(tds)
 
        if (n_swarms >= n_swarms_min) then
           ! Check whether the results are accurate enough
-          call get_accuracy(tds, rel_accuracy)
-          if (all(rel_accuracy < 1.0_dp)) exit
+          call get_accuracy(tds, rel_error)
+          if (verbose > 0) then
+             imax = maxloc(rel_error)
+             write(*, '(I6,A35,F12.4)') n_swarms, 'max rel. error (' // &
+                  trim(tds(imax(1))%description) // ')', rel_error(imax(1))
+          end if
+          if (all(rel_error < 1.0_dp)) exit
        end if
     end do
 
@@ -553,9 +560,9 @@ contains
   end subroutine SWARM_get_data
 
   !> Compute uncertainty in transport data relative to requirements
-  subroutine get_accuracy(tds, rel_accuracy)
+  subroutine get_accuracy(tds, rel_error)
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
-    real(dp), intent(out)        :: rel_accuracy(SWARM_num_td)
+    real(dp), intent(out)        :: rel_error(SWARM_num_td)
     real(dp)                     :: stddev, mean, var
     integer                      :: i, n
     real(dp), parameter          :: eps = 1e-100_dp
@@ -568,7 +575,7 @@ contains
        var    = maxval(tds(i)%var / (n-1)) / n ! Maximal variance
        stddev = sqrt(var)                      ! Standard deviation of the mean
 
-       rel_accuracy(i) = min(stddev / max(tds(i)%rel_acc * mean, eps), &
+       rel_error(i) = min(stddev / max(tds(i)%rel_acc * mean, eps), &
             stddev / max(tds(i)%abs_acc, eps))
     end do
   end subroutine get_accuracy
@@ -633,7 +640,7 @@ contains
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
     integer                      :: i, i_dim
     real(dp)                     :: fac, tmp, std
-    real(dp)                     :: energy, mu, rel_accuracy(SWARM_num_td)
+    real(dp)                     :: energy, mu, rel_error(SWARM_num_td)
 
     i = tds(1)%n_measurements
     fac = sqrt(1.0_dp / (i * (i-1)))
@@ -689,21 +696,21 @@ contains
     end if
     write(*, "(A21,2E12.4)") "mu_ExB", mu, std
 
-    call get_accuracy(tds, rel_accuracy)
+    call get_accuracy(tds, rel_error)
 
     ! The other swarm parameters
     do i = 1, SWARM_num_td
        if (tds(i)%n_dim == 1) then
           write(*, "(A21,2E12.4,F12.4)") &
                trim(tds(i)%description), &
-               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac, rel_accuracy(i)
+               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac, rel_error(i)
        else
 
           do i_dim = 1, tds(i)%n_dim
              write(*, "(A20,I0,2E12.4,F12.4)") &
                   trim(tds(i)%description) // "_", &
                   i_dim, tds(i)%val(i_dim), &
-                  sqrt(tds(i)%var(i_dim)) * fac, rel_accuracy(i)
+                  sqrt(tds(i)%var(i_dim)) * fac, rel_error(i)
           end do
        end if
     end do

@@ -9,7 +9,7 @@ program particle_swarm
   integer, parameter  :: dp = kind(0.0d0)
   type(CFG_t)         :: cfg
   character(len=80)   :: swarm_name
-  integer             :: swarm_size
+  integer             :: swarm_size, verbose
   type(PC_t)          :: pc    ! Particle data
   type(SWARM_field_t) :: field ! The field configuration
   type(SWARM_td_t)    :: td(SWARM_num_td)
@@ -25,7 +25,7 @@ program particle_swarm
      if (visualize_only) then
         call SWARM_visualize(pc, swarm_size, cfg)
      else
-        call SWARM_get_data(pc, swarm_size, td)
+        call SWARM_get_data(pc, swarm_size, td, verbose)
         call SWARM_print_results(td)
      end if
   end if
@@ -57,6 +57,7 @@ contains
 
     call CFG_update_from_arguments(cfg)
     call CFG_get(cfg, "swarm_name", swarm_name)
+    call CFG_get(cfg, "verbose", verbose)
 
     call CFG_get(cfg, "num_threads", num_threads)
     if (num_threads > 0) then
@@ -177,6 +178,8 @@ contains
   subroutine create_sim_config(cfg)
     type(CFG_t), intent(inout) :: cfg
 
+    call CFG_add(cfg, "verbose", 0, &
+         "Verbosity of program (higher values generate more output)")
     call CFG_add(cfg, "num_threads", -1, &
          "Number of OpenMP threads to use (default: all)")
     call CFG_add(cfg, "consecutive_run", .false., &
