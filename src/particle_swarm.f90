@@ -225,7 +225,7 @@ contains
          "The required rel/abs accuracy of the velocity")
     call CFG_add(cfg, "acc_diffusion", [1.0e-2_dp, 0.0_dp], &
          "The required rel/abs accuracy of the diffusion coeff.")
-    call CFG_add(cfg, "acc_alpha", [5.0e-3_dp, 0.0_dp], &
+    call CFG_add(cfg, "acc_alpha", [5.0e-3_dp, 1.0e1_dp], &
          "The required rel/abs accuracy of the ionization coeff.")
 
     ! Gas parameters

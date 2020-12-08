@@ -13,15 +13,18 @@ module m_particle_swarm
   ! These are the basic swarm parameters that we measure, but some others that
   ! can be derived from these (e.g., the mean energy or mobility) are printed as
   ! well.
-  integer, parameter :: SWARM_num_td = 8
-  integer, parameter :: ix_alpha     = 1
-  integer, parameter :: ix_eta       = 2
-  integer, parameter :: ix_coll_rate = 3
-  integer, parameter :: ix_flux_v    = 4
-  integer, parameter :: ix_bulk_v    = 5
-  integer, parameter :: ix_flux_diff = 6
-  integer, parameter :: ix_bulk_diff = 7
-  integer, parameter :: ix_flux_v2   = 8
+  integer, parameter :: SWARM_num_td  = 10
+  integer, parameter :: ix_alpha      = 1
+  integer, parameter :: ix_eta        = 2
+  integer, parameter :: ix_ionization = 3
+  integer, parameter :: ix_attachment = 4
+  integer, parameter :: ix_coll_rate  = 5
+  integer, parameter :: ix_flux_v     = 6
+  integer, parameter :: ix_bulk_v     = 7
+  integer, parameter :: ix_flux_diff  = 8
+  integer, parameter :: ix_bulk_diff  = 9
+  integer, parameter :: ix_flux_v2    = 10
+
 
   !> Indices of ionization collisions
   integer, allocatable :: ionization_colls(:)
@@ -32,6 +35,7 @@ module m_particle_swarm
   !> Type for storing transport data
   type SWARM_td_t
      character(len=20)     :: description    !< Description
+     character(len=20)     :: unit           !< Unit
      integer               :: n_dim          !< Dimension of td(:)
      integer               :: n_measurements !< Number of measurements
      real(dp), allocatable :: val(:)         !< Actual values
@@ -97,14 +101,16 @@ contains
 
     SWARM_field = field
 
-    call init_td(tds(ix_flux_v2), 3, "vel_sq")
-    call init_td(tds(ix_flux_v), 3, "vel")
-    call init_td(tds(ix_bulk_v), 3, "bulk_vel")
-    call init_td(tds(ix_flux_diff), 3, "diff")
-    call init_td(tds(ix_bulk_diff), 3, "bulk_diff")
-    call init_td(tds(ix_alpha), 1, "alpha")
-    call init_td(tds(ix_eta), 1, "eta")
-    call init_td(tds(ix_coll_rate), 1, "coll_rate")
+    call init_td(tds(ix_flux_v2), 3, "flux_v2", "(m/s)^2")
+    call init_td(tds(ix_flux_v), 3, "flux_v", "m/s")
+    call init_td(tds(ix_bulk_v), 3, "bulk_v", "m/s")
+    call init_td(tds(ix_flux_diff), 3, "flux_D", "m^2/s")
+    call init_td(tds(ix_bulk_diff), 3, "bulk_D", "m^2/s")
+    call init_td(tds(ix_alpha), 1, "alpha", "1/m")
+    call init_td(tds(ix_eta), 1, "eta", "1/m")
+    call init_td(tds(ix_coll_rate), 1, "coll_rate", "1/s")
+    call init_td(tds(ix_ionization), 1, "ionization", "1/s")
+    call init_td(tds(ix_attachment), 1, "attachment", "1/s")
 
     ! Get accuracy requirements
     call CFG_get(cfg, "acc_velocity_sq", rel_abs_acc)
@@ -147,15 +153,17 @@ contains
     end do
   end subroutine swarm_initialize
 
-  subroutine init_td(td, n_dim, description)
+  subroutine init_td(td, n_dim, description, unit)
     type(SWARM_td_t), intent(inout) :: td
     integer, intent(in)             :: n_dim
     character(len=*), intent(in)    :: description
+    character(len=*), intent(in)    :: unit
 
     allocate(td%val(n_dim))
     allocate(td%var(n_dim))
 
     td%description    = description
+    td%unit           = unit
     td%n_dim          = n_dim
     td%n_measurements = 0
     td%val            = 0.0_dp
@@ -338,6 +346,8 @@ contains
     call update_td(tds(ix_alpha), [ps%i_rate / norm2(ps%flux_v)])
     call update_td(tds(ix_eta), [ps%a_rate / norm2(ps%flux_v)])
     call update_td(tds(ix_coll_rate), [ps%coll_rate])
+    call update_td(tds(ix_ionization), [ps%i_rate])
+    call update_td(tds(ix_attachment), [ps%a_rate])
 
     ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
     ! td(8)     = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
@@ -641,76 +651,98 @@ contains
     integer                      :: i, i_dim
     real(dp)                     :: fac, tmp, std
     real(dp)                     :: energy, mu, rel_error(SWARM_num_td)
+    logical                      :: magnetic_field_used
+    character(len=2)             :: dimnames(3) = ["_x", "_y", "_z"]
 
     i = tds(1)%n_measurements
     fac = sqrt(1.0_dp / (i * (i-1)))
 
-    write(*, "(A21,3A12)") "name", "value", "sigma", "(rel. err)"
+    magnetic_field_used = (abs(SWARM_field%Bz) > 0.0_dp)
 
-    write(*, "(A21,2E12.4)") "E", norm2(SWARM_field%E_vec), 0.0_dp
-    write(*, "(A21,2E12.4)") "B", SWARM_field%Bz, 0.0_dp
-    write(*, "(A21,2E12.4)") "angle", SWARM_field%angle_deg, 0.0_dp
-    write(*, "(A21,2E12.4)") "omega_c", SWARM_field%omega_c, 0.0_dp
+    write(*, "(A15,4A12)") "name", "value", "sigma", "convergence", "unit"
+    write(*, "(A15,2E12.4,A24)") "E", norm2(SWARM_field%E_vec), 0.0_dp, "V/m"
+    if (magnetic_field_used) then
+       write(*, "(A15,2E12.4)") "B", SWARM_field%Bz, 0.0_dp
+       write(*, "(A15,2E12.4)") "angle", SWARM_field%angle_deg, 0.0_dp
+       write(*, "(A15,2E12.4)") "omega_c", SWARM_field%omega_c, 0.0_dp
+    end if
 
     ! mean energy
     tmp    = 0.5_dp * UC_elec_mass / UC_elec_volt
     energy = tmp * sum(tds(ix_flux_v2)%val)
     std    = tmp * sqrt(sum(tds(ix_flux_v2)%var)) * fac
-    write(*, "(A21,2E12.4)") "energy", energy, std
+    write(*, "(A15,2E12.4,A24)") "energy", energy, std, "eV"
 
-    ! mobility parallel to E
-    mu = -dot_product(tds(ix_flux_v)%val,  SWARM_field%E_vec) &
-         / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
-    std = fac * sqrt(dot_product(tds(ix_flux_v)%var,  SWARM_field%E_vec)) &
-         / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
-    write(*, "(A21,2E12.4)") "mu_E", mu, std
+    if (magnetic_field_used) then
+       ! mobility parallel to E
+       mu = -dot_product(tds(ix_flux_v)%val,  SWARM_field%E_vec) &
+            / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
+       std = fac * sqrt(dot_product(tds(ix_flux_v)%var,  SWARM_field%E_vec)) &
+            / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
+       write(*, "(A15,2E12.4,A24)") "mu_E", mu, std, "m^2/(Vs)"
 
-    ! mobility parallel to B
-    if (abs(SWARM_field%Ez) > sqrt(epsilon(1.0_dp))) then
-       mu = -tds(ix_flux_v)%val(3) / SWARM_field%Ez
-       std = fac * sqrt(tds(ix_flux_v)%var(3)) / abs(SWARM_field%Ez)
+       ! mobility parallel to B
+       if (abs(SWARM_field%Ez) > sqrt(epsilon(1.0_dp))) then
+          mu = -tds(ix_flux_v)%val(3) / SWARM_field%Ez
+          std = fac * sqrt(tds(ix_flux_v)%var(3)) / abs(SWARM_field%Ez)
+       else
+          mu = 0
+          std = 0
+       end if
+       write(*, "(A15,2E12.4,A24)") "mu_B", mu, std, "m^2/(Vs)"
+
+       ! mobility perpendicular to B (y-velocity over Ey)
+       if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp))) then
+          mu = -tds(ix_flux_v)%val(2) / SWARM_field%Ey
+          std = fac * sqrt(tds(ix_flux_v)%var(2)) / abs(SWARM_field%Ey)
+       else
+          mu = 0
+          std = 0
+       end if
+       write(*, "(A15,2E12.4,A24)") "mu_xB", mu, std, "m^2/(Vs)"
+
+       ! mobility in ExB-direction (x-velocity over Ey = E_perp)
+       if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp)) .and. &
+            abs(SWARM_field%Bz) > sqrt(epsilon(1.0_dp))) then
+          mu = tds(ix_flux_v)%val(1) / SWARM_field%Ey
+          std = fac * sqrt(tds(ix_flux_v)%var(1)) / abs(SWARM_field%Ey)
+       else
+          mu = 0
+          std = 0
+       end if
+       write(*, "(A15,2E12.4,A24)") "mu_ExB", mu, std, "m^2/(Vs)"
     else
-       mu = 0
-       std = 0
-    end if
-    write(*, "(A21,2E12.4)") "mu_B", mu, std
+       ! mobility parallel to E
+       mu = -dot_product(tds(ix_flux_v)%val,  SWARM_field%E_vec) &
+            / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
+       std = fac * sqrt(dot_product(tds(ix_flux_v)%var,  SWARM_field%E_vec)) &
+            / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
+       write(*, "(A15,2E12.4,A24)") "mu_flux", mu, std, "m^2/(Vs)"
 
-    ! mobility perpendicular to B (y-velocity over Ey)
-    if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp))) then
-       mu = -tds(ix_flux_v)%val(2) / SWARM_field%Ey
-       std = fac * sqrt(tds(ix_flux_v)%var(2)) / abs(SWARM_field%Ey)
-    else
-       mu = 0
-       std = 0
+       mu = -dot_product(tds(ix_bulk_v)%val,  SWARM_field%E_vec) &
+            / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
+       std = fac * sqrt(dot_product(tds(ix_bulk_v)%var,  SWARM_field%E_vec)) &
+            / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
+       write(*, "(A15,2E12.4,A24)") "mu_bulk", mu, std, "m^2/(Vs)"
     end if
-    write(*, "(A21,2E12.4)") "mu_xB", mu, std
-
-    ! mobility in ExB-direction (x-velocity over Ey = E_perp)
-    if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp)) .and. &
-         abs(SWARM_field%Bz) > sqrt(epsilon(1.0_dp))) then
-       mu = tds(ix_flux_v)%val(1) / SWARM_field%Ey
-       std = fac * sqrt(tds(ix_flux_v)%var(1)) / abs(SWARM_field%Ey)
-    else
-       mu = 0
-       std = 0
-    end if
-    write(*, "(A21,2E12.4)") "mu_ExB", mu, std
 
     call get_accuracy(tds, rel_error)
 
     ! The other swarm parameters
     do i = 1, SWARM_num_td
        if (tds(i)%n_dim == 1) then
-          write(*, "(A21,2E12.4,F12.4)") &
+          write(*, "(A15,2E12.4,F12.4,A12)") &
                trim(tds(i)%description), &
-               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac, rel_error(i)
+               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac, &
+               rel_error(i), trim(tds(i)%unit)
        else
 
           do i_dim = 1, tds(i)%n_dim
-             write(*, "(A20,I0,2E12.4,F12.4)") &
-                  trim(tds(i)%description) // "_", &
-                  i_dim, tds(i)%val(i_dim), &
-                  sqrt(tds(i)%var(i_dim)) * fac, rel_error(i)
+             write(*, "(A15,2E12.4,F12.4,A12)") &
+                  trim(tds(i)%description) // dimnames(i_dim),&
+                  tds(i)%val(i_dim), &
+                  sqrt(tds(i)%var(i_dim)) * fac, &
+                  rel_error(i), trim(tds(i)%unit)
           end do
        end if
     end do
