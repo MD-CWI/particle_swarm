@@ -548,7 +548,7 @@ contains
 
        call update_td_from_ps(tds, ps)
 
-       if (verbose > 1) call SWARM_print_results(tds)
+       if (verbose > 1) call SWARM_print_results(tds, verbose)
 
        if (n_swarms >= n_swarms_min) then
           ! Check whether the results are accurate enough
@@ -645,9 +645,10 @@ contains
     end do
   end subroutine create_swarm
 
-  subroutine SWARM_print_results(tds)
+  subroutine SWARM_print_results(tds, verbose)
     use m_units_constants
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
+    integer, intent(in)          :: verbose
     integer                      :: i, i_dim
     real(dp)                     :: fac, tmp, std
     real(dp)                     :: energy, mu, rel_error(SWARM_num_td)
@@ -659,7 +660,9 @@ contains
 
     magnetic_field_used = (abs(SWARM_field%Bz) > 0.0_dp)
 
-    write(*, "(A15,4A12)") "name", "value", "sigma", "convergence", "unit"
+    if (verbose > 0) &
+         write(*, "(A15,4A12)") "name", "value", "sigma", "convergence", "unit"
+
     write(*, "(A15,2E12.4,A24)") "E", norm2(SWARM_field%E_vec), 0.0_dp, "V/m"
     if (magnetic_field_used) then
        write(*, "(A15,2E12.4)") "B", SWARM_field%Bz, 0.0_dp

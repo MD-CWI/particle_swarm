@@ -26,7 +26,7 @@ program particle_swarm
         call SWARM_visualize(pc, swarm_size, cfg)
      else
         call SWARM_get_data(pc, swarm_size, td, verbose)
-        call SWARM_print_results(td)
+        call SWARM_print_results(td, verbose)
      end if
   end if
 
@@ -87,7 +87,7 @@ contains
 
     if (.not. consecutive_run) then
        tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_config.txt"
-       print *, "Writing configuration to ", trim(tmp_name)
+       if (verbose > 0) print *, "Writing configuration to ", trim(tmp_name)
        call CFG_write(cfg, trim(tmp_name))
 
        call CFG_get(cfg, "gas_file", cs_file)
@@ -119,29 +119,34 @@ contains
        call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
        call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
 
-       print *, "--------------------"
-       print *, "Gas information"
-       write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
-       print *, ""
-       print *, "Component - fraction"
-       do nn = 1, n_gas_comp
-          write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
-               gas_fracs(nn)
-       end do
-       print *, ""
+       if (verbose > 0) then
+          print *, "--------------------"
+          print *, "Gas information"
+          write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
+          print *, ""
+          print *, "Component - fraction"
+          do nn = 1, n_gas_comp
+             write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
+                  gas_fracs(nn)
+          end do
+          print *, ""
+       end if
 
        tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_coeffs.txt"
-       print *, "Writing colrate table (as text) to ", trim(tmp_name)
+       if (verbose > 0) &
+            print *, "Writing colrate table (as text) to ", trim(tmp_name)
        call IO_write_coeffs(pc, trim(tmp_name))
 
        tmp_name = trim(output_dir) // "/" // trim(swarm_name)
-       print *, "Writing particle params (raw) to ", &
-            trim(tmp_name) // "_params.dat"
-       print *, "Writing particle lookup table (raw) to ", &
-            trim(tmp_name) // "_lt.dat"
+       if (verbose > 0)then
+          print *, "Writing particle params (raw) to ", &
+               trim(tmp_name) // "_params.dat"
+          print *, "Writing particle lookup table (raw) to ", &
+               trim(tmp_name) // "_lt.dat"
+       end if
        call pc%to_file(trim(tmp_name) // "_params.dat", &
             trim(tmp_name) // "_lt.dat")
-       print *, "--------------------"
+       if (verbose > 0) print *, "--------------------"
 
     else ! Restarted run (can only change field!)
        tmp_name = trim(output_dir) // "/" // trim(swarm_name)
