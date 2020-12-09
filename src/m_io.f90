@@ -140,12 +140,10 @@ contains
          stop
       end if
 
-      ! Create format string for the header
-      write(fmt_string, fmt="(A,I0,A)") "(A", col_width, ")"
-
       ! Write header
       do n = 1, n_cols
-         write(my_unit, advance="NO", FMT=fmt_string) "  # " // col_names(n)
+         write(my_unit, advance="NO", fmt="(A)") '"' // &
+              trim(col_names(n)) // '" '
       end do
 
       write(my_unit, *) ""
