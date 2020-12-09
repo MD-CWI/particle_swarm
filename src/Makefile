@@ -29,5 +29,8 @@ clean:
 	$(RM) -f *.o *.mod ../particle_swarm
 
 # Dependency information
-m_particle_swarm.o:	m_io.o m_config.o
-../particle_swarm:	$(OBJS) ../particle_core/libparticle_core.a
+LIBPC := ../particle_core/libparticle_core.a
+../particle_swarm: $(OBJS)
+$(OBJS): $(LIBPC)
+m_particle_swarm.o: m_config.o
+particle_swarm.o: m_particle_swarm.o m_io.o m_config.o
