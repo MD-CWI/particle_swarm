@@ -96,6 +96,9 @@ module m_particle_core
      !> List of collisions
      type(CS_coll_t), allocatable :: colls(:)
 
+     !> Copy of the cross sections that were used
+     type(CS_t), allocatable      :: cross_secs(:)
+
      !> Number of collisions
      integer                      :: n_colls
 
@@ -1181,6 +1184,8 @@ contains
     n_colls      = size(cross_secs)
     self%n_colls = n_colls
     allocate(self%colls(n_colls))
+    allocate(self%cross_secs(n_colls))
+    self%cross_secs = cross_secs
     allocate(self%coll_is_event(n_colls))
     self%coll_is_event(:) = .false.
 
