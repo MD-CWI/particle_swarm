@@ -6,15 +6,15 @@ program particle_swarm
 
   implicit none
 
-  integer, parameter  :: dp = kind(0.0d0)
-  type(CFG_t)         :: cfg
-  character(len=80)   :: swarm_name
-  integer             :: swarm_size, verbose
-  type(PC_t)          :: pc    ! Particle data
-  type(SWARM_field_t) :: field ! The field configuration
-  type(SWARM_td_t)    :: td(SWARM_num_td)
-  real(dp)            :: max_cpu_time
-  logical             :: dry_run, visualize_only
+  integer, parameter            :: dp = kind(0.0d0)
+  type(CFG_t)                   :: cfg
+  character(len=80)             :: swarm_name
+  integer                       :: swarm_size, verbose
+  type(PC_t)                    :: pc    ! Particle data
+  type(SWARM_field_t)           :: field ! The field configuration
+  type(SWARM_td_t), allocatable :: td(:)
+  real(dp)                      :: max_cpu_time
+  logical                       :: dry_run, visualize_only
 
   call initialize_all(cfg)
 
@@ -27,7 +27,7 @@ program particle_swarm
         call SWARM_visualize(pc, swarm_size, cfg)
      else
         call SWARM_get_data(pc, swarm_size, td, verbose, max_cpu_time)
-        call SWARM_print_results(td, verbose)
+        call SWARM_print_results(td, pc, verbose)
      end if
   end if
 

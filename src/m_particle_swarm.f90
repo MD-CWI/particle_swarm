@@ -13,7 +13,7 @@ module m_particle_swarm
   ! These are the basic swarm parameters that we measure, but some others that
   ! can be derived from these (e.g., the mean energy or mobility) are printed as
   ! well.
-  integer, parameter :: SWARM_num_td  = 10
+  integer, parameter :: SWARM_num_td = 10
   integer, parameter :: ix_alpha      = 1
   integer, parameter :: ix_eta        = 2
   integer, parameter :: ix_ionization = 3
@@ -24,7 +24,7 @@ module m_particle_swarm
   integer, parameter :: ix_flux_diff  = 8
   integer, parameter :: ix_bulk_diff  = 9
   integer, parameter :: ix_flux_v2    = 10
-
+  integer, allocatable :: ix_rates(:)
 
   !> Indices of ionization collisions
   integer, allocatable :: ionization_colls(:)
@@ -34,8 +34,8 @@ module m_particle_swarm
 
   !> Type for storing transport data
   type SWARM_td_t
-     character(len=20)     :: description    !< Description
-     character(len=20)     :: unit           !< Unit
+     character(len=40)     :: description    !< Description
+     character(len=40)     :: unit           !< Unit
      integer               :: n_dim          !< Dimension of td(:)
      integer               :: n_measurements !< Number of measurements
      real(dp), allocatable :: val(:)         !< Actual values
@@ -63,6 +63,7 @@ module m_particle_swarm
      real(dp)            :: coll_rate   !< Collision rate
      real(dp)            :: i_rate      !< Ionization rate
      real(dp)            :: a_rate      !< Attachment rate
+     real(dp), allocatable :: rates(:)  !< All collision rates
      real(dp)            :: flux_v(3)   !< Mean velocity
      real(dp)            :: bulk_v(3)   !< Mean bulk velocity
      real(dp)            :: bulk_dif(3) !< Bulk diffusion
@@ -92,15 +93,17 @@ contains
   subroutine swarm_initialize(pc, cfg, tds, field)
     use m_config
     use m_cross_sec
-    type(PC_t), intent(in)          :: pc
-    type(CFG_t), intent(inout)      :: cfg
-    type(SWARM_td_t), intent(inout) :: tds(:)
-    type(SWARM_field_t), intent(in) :: field
-    real(dp)                        :: rel_abs_acc(2)
-    integer                         :: n, i_i, i_a
+    type(PC_t), intent(in)                       :: pc
+    type(CFG_t), intent(inout)                   :: cfg
+    type(SWARM_td_t), allocatable, intent(inout) :: tds(:)
+    type(SWARM_field_t), intent(in)              :: field
+    real(dp)                                     :: rel_abs_acc(2)
+    integer                                      :: n, i_i, i_a
+    character(len=40)                            :: name, energy_text
 
     SWARM_field = field
 
+    allocate(tds(SWARM_num_td + pc%n_colls))
     call init_td(tds(ix_flux_v2), 3, "flux_v2", "(m/s)^2")
     call init_td(tds(ix_flux_v), 3, "flux_v", "m/s")
     call init_td(tds(ix_bulk_v), 3, "bulk_v", "m/s")
@@ -111,6 +114,31 @@ contains
     call init_td(tds(ix_coll_rate), 1, "coll_rate", "1/s")
     call init_td(tds(ix_ionization), 1, "ionization", "1/s")
     call init_td(tds(ix_attachment), 1, "attachment", "1/s")
+
+    allocate(ix_rates(pc%n_colls))
+    do n = 1, pc%n_colls
+       ix_rates(n) = SWARM_num_td + n
+
+       ! Get description of energy threshold
+       write(energy_text, '(F10.2,A)') pc%cross_secs(n)%min_energy, " eV"
+       energy_text = adjustl(energy_text)
+
+       select case (pc%cross_secs(n)%coll%type)
+       case (CS_ionize_t)
+          write(name, '(A,I0,A,A,A)') "C", n, " Ionization ", &
+               trim(pc%cross_secs(n)%gas_name) // " ", trim(energy_text)
+       case (CS_attach_t)
+          write(name, '(A,I0,A,A)') "C", n, " Attachment ", &
+               trim(pc%cross_secs(n)%gas_name)
+       case (CS_excite_t)
+          write(name, '(A,I0,A,A,A)') "C", n, " Excitation ", &
+               trim(pc%cross_secs(n)%gas_name) // " ", trim(energy_text)
+       case (CS_elastic_t)
+          write(name, '(A,I0,A,A)') "C", n, " Elastic ", &
+               trim(pc%cross_secs(n)%gas_name)
+       end select
+       call init_td(tds(ix_rates(n)), 1, name, "1/s")
+    end do
 
     ! Get accuracy requirements
     call CFG_get(cfg, "acc_velocity_sq", rel_abs_acc)
@@ -258,6 +286,13 @@ contains
     type(pc_t), intent(inout)         :: pc
     integer                           :: i, num_part
 
+    if (.not. allocated(ps%rates)) then
+       allocate(ps%rates(pc%n_colls))
+    else if (size(ps%rates) /= pc%n_colls) then
+       deallocate(ps%rates)
+       allocate(ps%rates(pc%n_colls))
+    end if
+
     ps%n_samples = 0
     ps%flux_v    = 0.0_dp
     ps%bulk_v    = 0.0_dp
@@ -267,6 +302,7 @@ contains
     ps%coll_rate = 0.0_dp
     ps%i_rate    = 0.0_dp
     ps%a_rate    = 0.0_dp
+    ps%rates(:)  = 0.0_dp
 
     call recenter_swarm(pc, ps%x_prev)
 
@@ -281,14 +317,17 @@ contains
     type(part_stats_t), intent(inout) :: ps
     real(dp), intent(in)              :: dt
     integer                           :: ix, num_part
-    real(dp)                          :: inv_n_samples
+    real(dp)                          :: inv_n_samples, inv_num_part
     real(dp)                          :: v(3), v2(3), corr_fac, x2(3)
     real(dp)                          :: mean_x(3), bulk_v(3), bulk_dif(3)
-    real(dp)                          :: coll_rates(PC_max_num_coll)
+    real(dp)                          :: rates(pc%n_colls)
+    real(dp)                          :: sum_rates(pc%n_colls)
     type(PC_part_t)                   :: part
 
-    num_part = pc%get_num_sim_part()
-    corr_fac = num_part/(num_part-1.0_dp)
+    num_part     = pc%get_num_sim_part()
+    inv_num_part = 1.0_dp/num_part
+    corr_fac     = num_part/(num_part-1.0_dp)
+    sum_rates    = 0.0_dp
 
     call recenter_swarm(pc, mean_x)
 
@@ -317,19 +356,19 @@ contains
 
        ! This placing is intentional:
        ! http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-       ps%cov_xv     = ps%cov_xv + (v - ps%flux_v) * part%x * corr_fac
+       ps%cov_xv = ps%cov_xv + (v - ps%flux_v) * part%x * corr_fac
 
        ! ps%cov_v2_xv  = ps%cov_v2_xv + v2 * (v - ps%v) * part%x
-       ps%flux_v2         = ps%flux_v2 + (v2 - ps%flux_v2) * inv_n_samples
+       ps%flux_v2 = ps%flux_v2 + (v2 - ps%flux_v2) * inv_n_samples
 
-       call pc%get_coll_rates(sqrt(sum(v2)), coll_rates(1:pc%n_colls))
-       ps%coll_rate = ps%coll_rate + (sum(coll_rates(1:pc%n_colls)) - &
-            ps%coll_rate) * inv_n_samples
-       ps%i_rate = ps%i_rate + (sum(coll_rates(ionization_colls)) - &
-            ps%i_rate) * inv_n_samples
-       ps%a_rate = ps%a_rate + (sum(coll_rates(attachment_colls)) - &
-            ps%a_rate) * inv_n_samples
+       ! Compute this sum in the loop to reduce computational cost
+       call pc%get_coll_rates(sqrt(sum(v2)), rates)
+       ps%rates = ps%rates + (rates - ps%rates) * inv_n_samples
     end do
+
+    ps%coll_rate = sum(ps%rates)
+    ps%i_rate = sum(ps%rates(ionization_colls))
+    ps%a_rate = sum(ps%rates(attachment_colls))
 
   end subroutine update_particle_stats
 
@@ -337,6 +376,7 @@ contains
     use m_units_constants
     type(SWARM_td_t), intent(inout) :: tds(:)
     type(part_stats_t), intent(in)  :: ps
+    integer                         :: n
 
     call update_td(tds(ix_flux_v2), ps%flux_v2)
     call update_td(tds(ix_flux_v), ps%flux_v)
@@ -348,6 +388,10 @@ contains
     call update_td(tds(ix_coll_rate), [ps%coll_rate])
     call update_td(tds(ix_ionization), [ps%i_rate])
     call update_td(tds(ix_attachment), [ps%a_rate])
+
+    do n = 1, size(ix_rates)
+       call update_td(tds(ix_rates(n)), [ps%rates(n)])
+    end do
 
     ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
     ! td(8)     = ps%cov_v2_xv(1) / (ps%n_samples * ps%v2)  ! Long. energy diffusion
@@ -552,7 +596,7 @@ contains
 
        call update_td_from_ps(tds, ps)
 
-       if (verbose > 1) call SWARM_print_results(tds, verbose)
+       if (verbose > 1) call SWARM_print_results(tds, pc, verbose)
 
        if (n_swarms >= n_swarms_min) then
           ! Check whether the results are accurate enough
@@ -578,12 +622,12 @@ contains
   !> Compute uncertainty in transport data relative to requirements
   subroutine get_accuracy(tds, rel_error)
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
-    real(dp), intent(out)        :: rel_error(SWARM_num_td)
+    real(dp), intent(out)        :: rel_error(:)
     real(dp)                     :: stddev, mean, var
     integer                      :: i, n
     real(dp), parameter          :: eps = 1e-100_dp
 
-    do i = 1, SWARM_num_td
+    do i = 1, size(rel_error)
        n      = tds(i)%n_measurements
        ! Below we use the norm for vector-based transport data, so that
        ! orientation of the field should not matter
@@ -653,13 +697,14 @@ contains
     end do
   end subroutine create_swarm
 
-  subroutine SWARM_print_results(tds, verbose)
+  subroutine SWARM_print_results(tds, pc, verbose)
     use m_units_constants
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
+    type(pc_t), intent(in)       :: pc
     integer, intent(in)          :: verbose
     integer                      :: i, i_dim
     real(dp)                     :: fac, tmp, std
-    real(dp)                     :: energy, mu, rel_error(SWARM_num_td)
+    real(dp)                     :: energy, mu, rel_error(size(tds))
     logical                      :: magnetic_field_used
     character(len=2)             :: dimnames(3) = ["_x", "_y", "_z"]
 
@@ -669,20 +714,20 @@ contains
     magnetic_field_used = (abs(SWARM_field%Bz) > 0.0_dp)
 
     if (verbose > 0) &
-         write(*, "(A15,4A12)") "name", "value", "sigma", "convergence", "unit"
+         write(*, "(A35,4A12)") "name", "value", "sigma", "convergence", "unit"
 
-    write(*, "(A15,2E12.4,A24)") "E", norm2(SWARM_field%E_vec), 0.0_dp, "V/m"
+    write(*, "(A35,2E12.4,A24)") "E", norm2(SWARM_field%E_vec), 0.0_dp, "V/m"
     if (magnetic_field_used) then
-       write(*, "(A15,2E12.4)") "B", SWARM_field%Bz, 0.0_dp
-       write(*, "(A15,2E12.4)") "angle", SWARM_field%angle_deg, 0.0_dp
-       write(*, "(A15,2E12.4)") "omega_c", SWARM_field%omega_c, 0.0_dp
+       write(*, "(A35,2E12.4)") "B", SWARM_field%Bz, 0.0_dp
+       write(*, "(A35,2E12.4)") "angle", SWARM_field%angle_deg, 0.0_dp
+       write(*, "(A35,2E12.4)") "omega_c", SWARM_field%omega_c, 0.0_dp
     end if
 
     ! mean energy
     tmp    = 0.5_dp * UC_elec_mass / UC_elec_volt
     energy = tmp * sum(tds(ix_flux_v2)%val)
     std    = tmp * sqrt(sum(tds(ix_flux_v2)%var)) * fac
-    write(*, "(A15,2E12.4,A24)") "energy", energy, std, "eV"
+    write(*, "(A35,2E12.4,A24)") "energy", energy, std, "eV"
 
     if (magnetic_field_used) then
        ! mobility parallel to E
@@ -690,7 +735,7 @@ contains
             / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
        std = fac * sqrt(dot_product(tds(ix_flux_v)%var,  SWARM_field%E_vec)) &
             / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
-       write(*, "(A15,2E12.4,A24)") "mu_E", mu, std, "m^2/(Vs)"
+       write(*, "(A35,2E12.4,A24)") "mu_E", mu, std, "m^2/(Vs)"
 
        ! mobility parallel to B
        if (abs(SWARM_field%Ez) > sqrt(epsilon(1.0_dp))) then
@@ -700,7 +745,7 @@ contains
           mu = 0
           std = 0
        end if
-       write(*, "(A15,2E12.4,A24)") "mu_B", mu, std, "m^2/(Vs)"
+       write(*, "(A35,2E12.4,A24)") "mu_B", mu, std, "m^2/(Vs)"
 
        ! mobility perpendicular to B (y-velocity over Ey)
        if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp))) then
@@ -710,7 +755,7 @@ contains
           mu = 0
           std = 0
        end if
-       write(*, "(A15,2E12.4,A24)") "mu_xB", mu, std, "m^2/(Vs)"
+       write(*, "(A35,2E12.4,A24)") "mu_xB", mu, std, "m^2/(Vs)"
 
        ! mobility in ExB-direction (x-velocity over Ey = E_perp)
        if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp)) .and. &
@@ -721,35 +766,34 @@ contains
           mu = 0
           std = 0
        end if
-       write(*, "(A15,2E12.4,A24)") "mu_ExB", mu, std, "m^2/(Vs)"
+       write(*, "(A35,2E12.4,A24)") "mu_ExB", mu, std, "m^2/(Vs)"
     else
        ! mobility parallel to E
        mu = -dot_product(tds(ix_flux_v)%val,  SWARM_field%E_vec) &
             / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
        std = fac * sqrt(dot_product(tds(ix_flux_v)%var,  SWARM_field%E_vec)) &
             / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
-       write(*, "(A15,2E12.4,A24)") "mu_flux", mu, std, "m^2/(Vs)"
+       write(*, "(A35,2E12.4,A24)") "mu_flux", mu, std, "m^2/(Vs)"
 
        mu = -dot_product(tds(ix_bulk_v)%val,  SWARM_field%E_vec) &
             / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
        std = fac * sqrt(dot_product(tds(ix_bulk_v)%var,  SWARM_field%E_vec)) &
             / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
-       write(*, "(A15,2E12.4,A24)") "mu_bulk", mu, std, "m^2/(Vs)"
+       write(*, "(A35,2E12.4,A24)") "mu_bulk", mu, std, "m^2/(Vs)"
     end if
 
     call get_accuracy(tds, rel_error)
 
     ! The other swarm parameters
-    do i = 1, SWARM_num_td
+    do i = 1, size(tds)
        if (tds(i)%n_dim == 1) then
-          write(*, "(A15,2E12.4,F12.4,A12)") &
+          write(*, "(A35,2E12.4,F12.4,A12)") &
                trim(tds(i)%description), &
                tds(i)%val(1), sqrt(tds(i)%var(1)) * fac, &
                rel_error(i), trim(tds(i)%unit)
        else
-
           do i_dim = 1, tds(i)%n_dim
-             write(*, "(A15,2E12.4,F12.4,A12)") &
+             write(*, "(A35,2E12.4,F12.4,A12)") &
                   trim(tds(i)%description) // dimnames(i_dim),&
                   tds(i)%val(i_dim), &
                   sqrt(tds(i)%var(i_dim)) * fac, &
