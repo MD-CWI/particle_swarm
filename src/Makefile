@@ -1,3 +1,8 @@
+SRCS	:= m_particle_swarm.f90 m_io.f90 m_config.f90
+OBJS	:= $(SRCS:%.f90=%.o)
+INCDIRS	:= ../particle_core
+LIBDIRS := ../particle_core
+LIBS	:= particle_core
 FC	:= gfortran
 FFLAGS	:= -Wall -O2 -std=f2008 -fopenmp -Wno-unused-dummy-argument
 
@@ -6,14 +11,13 @@ ifeq ($(DEBUG), 1)
 	-pedantic -finit-real=nan
 endif
 
+ifeq ($(PROF), gprof)
+	FFLAGS += -pg
+else ifeq ($(PROF), gperftools)
+	LIBS += profiler
+endif
+
 vpath %.f90 config_fortran
-
-SRCS	:= m_particle_swarm.f90 m_io.f90 m_config.f90
-OBJS	:= $(SRCS:%.f90=%.o)
-
-INCDIRS	:= ../particle_core
-LIBDIRS := ../particle_core
-LIBS	:= particle_core
 
 %.o: 	%.f90
 	$(FC) -c -o $@ $< $(FFLAGS) $(addprefix -I,$(INCDIRS))
