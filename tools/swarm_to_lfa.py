@@ -51,7 +51,7 @@ if __name__ == '__main__':
         x = 'Electric field / N (Td)'
         print('# First column: ', x, '\n')
 
-        # Simple guess for reaction list
+        print('# Guess for reaction list')
         print('reaction_list')
         print('-----------------------')
         print('# Ionization')
@@ -68,9 +68,6 @@ if __name__ == '__main__':
             if m:
                 print('e + ' + m.group(1) + ' -> e + e + ' +
                       m.group(1) + '+,field_table,' + m.group(0))
-        for c in df.columns.values:
-            if pattern.match(c):
-                write_col(df, x, c)
         print('-----------------------\n')
 
         write_col(df, x, 'Mean energy (eV)')
