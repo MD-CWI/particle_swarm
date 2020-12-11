@@ -30,7 +30,7 @@ def get_args():
         -gc N2 1.0 -E_range 1e7 2e7 -E_num 10''')
     parser.add_argument('cs', type=str,
                         help='File with cross sections')
-    parser.add_argument('-o', type=str, default='results.csv',
+    parser.add_argument('-o', type=str, default='swarm_data.csv',
                         help='Transport data output file')
     parser.add_argument('-sigma', action='store_true',
                         help='Include standard deviations in output')
