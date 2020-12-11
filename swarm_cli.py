@@ -12,12 +12,11 @@ import argparse
 import tempfile
 import shutil
 import os
-import time
 import sys
 import math
 import numpy as np
-from multiprocessing import Pool, Manager, cpu_count
-from subprocess import check_output, CalledProcessError
+import pandas as pd
+from subprocess import check_output
 
 
 def get_args():
@@ -31,7 +30,7 @@ def get_args():
         -gc N2 1.0 -E_range 1e7 2e7 -E_num 10''')
     parser.add_argument('cs', type=str,
                         help='File with cross sections')
-    parser.add_argument('-of', type=str, default='results.txt',
+    parser.add_argument('-o', type=str, default='results.csv',
                         help='Transport data output file')
     parser.add_argument('-sigma', action='store_true',
                         help='Include standard deviations in output')
@@ -79,8 +78,6 @@ def get_args():
                         metavar='temperature', help='Gas temperature (K)')
     parser.add_argument('-p', type=float, default=1.0,
                         metavar='pressure', help='Gas pressure (bar)')
-    parser.add_argument('-np', type=int, default=max(1, cpu_count()),
-                        help='Number of parallel proccesses')
 
     parser.add_argument('-acc_v2', type=float, nargs=2, default=(1e-3, 0.0),
                         metavar=('rel', 'abs'),
@@ -103,13 +100,10 @@ def create_swarm_cfg(tmpdir, args):
     f.write('output_dir = ' + tmpdir + '\n')
     f.write('gas_file = ' + args.cs + '\n')
     f.write('swarm_name = swarm_cli\n')
-    f.write('num_threads = 1\n')
     f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
     f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
     f.write('gas_pressure = ' + str(args.p) + '\n')
     f.write('gas_temperature = ' + str(args.T) + '\n')
-    f.write('consecutive_run = T\n')
-    f.write('dry_run = F\n')
     f.write('acc_velocity_sq = ' + ' '.join(map(str, args.acc_v2)) + '\n')
     f.write('acc_velocity = ' + ' '.join(map(str, args.acc_v)) + '\n')
     f.write('acc_diffusion = ' + ' '.join(map(str, args.acc_D)) + '\n')
@@ -124,15 +118,6 @@ def create_swarm_cfg(tmpdir, args):
     return fname
 
 
-def create_init_cfg(tmpdir):
-    fname = tmpdir + '/init_cfg.txt'
-    f = open(fname, 'w')
-    f.write('consecutive_run = F\n')
-    f.write('dry_run = T\n')
-    f.close()
-    return fname
-
-
 def create_var_cfg(tmpdir, index, varnames, values):
     fname = tmpdir + '/var_' + str(index) + '.txt'
     f = open(fname, 'w')
@@ -142,50 +127,11 @@ def create_var_cfg(tmpdir, index, varnames, values):
     return fname
 
 
-def pswarm_wrapper(cmd_and_num):
-    cmd, num = cmd_and_num
-    try:
-        res = check_output(cmd)
-    except:
-        print("Error when running: " + cmd)
-        sys.exit(1)
-    num.value += 1
-    return res
-
-
 def progress_bar(pct):
     n = int(pct * 0.4)
     sys.stdout.write('\r')
     sys.stdout.write('[{0:40s}] {1:.1f}%'.format('=' * n, pct))
     sys.stdout.flush()
-
-
-# Adjust mobilities for fields in which they are undefined (because of division
-# by zero), by linearly copying or extrapolating from the nearest values
-def fix_mobilities(tbl, names, E_num, B_num, angle_list):
-    eps = 1e-5
-    angles = map(float, angle_list)
-    angle_num = len(angles)
-    i_muB = names.index('mu_B')
-    i_muxB = names.index('mu_xB')
-    i_muExB = names.index('mu_ExB')
-
-    if min(angles) < eps:
-        for n in range(B_num * E_num):
-            data = tbl[n*angle_num:(n+1)*angle_num, :]
-            # Copy values because uncertainty is large, and gradient probably
-            # goes to zero
-            data[0, i_muxB] = data[1, i_muxB]
-            data[0, i_muExB] = data[1, i_muExB]
-            tbl[n*angle_num:(n+1)*angle_num, :] = data
-
-    if max(angles) > 90.0 - eps:
-        for n in range(B_num * E_num):
-            data = tbl[n*angle_num:(n+1)*angle_num, :]
-            # Linearly extrapolate
-            data[angle_num-1, i_muB] = 2 * data[angle_num-2, i_muB] -\
-                data[angle_num-3, i_muB]
-            tbl[n*angle_num:(n+1)*angle_num, :] = data
 
 
 def print_swarm_info(args, E_list, B_list, angle_list):
@@ -197,8 +143,7 @@ def print_swarm_info(args, E_list, B_list, angle_list):
     print("Temperature (K)    : {}".format(args.T))
     print("Pressure (bar)     : {}".format(args.p))
     print("Particle mover     : {}".format(args.mover))
-    print("Output file        : {}".format(args.of))
-    print("Number of CPUs     : {}".format(args.np))
+    print("Output file        : {}".format(args.o))
     print("----------------------------------------")
     Evals = ["{:.2E}".format(val) for val in E_list]
     Bvals = ["{:.2E}".format(val) for val in B_list]
@@ -244,96 +189,48 @@ if __name__ == '__main__':
 
     try:
         tmpdir = tempfile.mkdtemp(dir=os.getcwd())
-
         base_cfg = create_swarm_cfg(tmpdir, args)
-        init_cfg = create_init_cfg(tmpdir)
-
-        # Perform a dry run of particle_swarm to generate lookup tables for the
-        # cross sections
-        try:
-            out = check_output(['./particle_swarm', base_cfg, init_cfg])
-        except CalledProcessError as e:
-            print("particle_swarm returned an error")
-            print(e.output)
-            sys.exit(1)
-
-        with open(tmpdir + '/swarm_cli_cs_summary.txt') as f:
-            cs_info = f.read()
-            print(cs_info.rstrip())
-            print("------------------------------------------------------")
-
         cmd_list = []
+        swarm_data = []
 
-        pool = Pool(processes=args.np)
-        mgr = Manager()
-        num = mgr.Value('i', 0)
         i = 0
         names = ['electric_field', 'field_angle_degrees', 'magnetic_field']
+        n_runs = len(B_list) * len(E_list) * len(angle_list)
 
         for B in B_list:
             for E in E_list:
                 for angle in angle_list:
+                    progress_bar(100. * i / n_runs)
                     i += 1
                     var_cfg = create_var_cfg(tmpdir, i, names, [E, angle, B])
-                    cmd_list.append([['./particle_swarm',
-                                      base_cfg, var_cfg], num])
-
-        res = pool.map_async(pswarm_wrapper, cmd_list)
-        while num.value < n_runs:
-            time.sleep(1.)
-            progress_bar(num.value / n_runs * 100)
-        print('')
-        swarm_data = res.get()
-
+                    res = check_output(['./particle_swarm', base_cfg, var_cfg])
+                    swarm_data.append(res)
     finally:
+        progress_bar(100.)
+        print("")
         shutil.rmtree(tmpdir)
 
     # Find transport data names
     td_names = []
     for line in swarm_data[0].splitlines():
-        name = line.split()[0].decode('ascii')
+        name = line.decode('ascii')[:40].strip()
         td_names.append(name)
 
     n_cols = len(td_names)
-
-    if args.sigma:
-        td_matrix = np.zeros((n_runs, 2 * n_cols))
-    else:
-        td_matrix = np.zeros((n_runs, n_cols))
+    data = np.zeros((n_runs, n_cols))
+    sigma = np.zeros((n_runs, n_cols))
 
     for i, res in enumerate(swarm_data):
         for j, line in enumerate(res.splitlines()):
-            # Format is name = value stddev
-            # line.split()[2] corresponds to 'value'
-            # line.split()[3] corresponds to 'stddev'
-            td_matrix[i, j] = line.split()[1]
-            if args.sigma:
-                td_matrix[i, j + n_cols] = line.split()[2]
+            values = line[40:].split()
+            data[i, j] = values[0]
+            sigma[i, j] = values[1]
 
-    # Fix mobilities for specific angles (where they are undefined)
-    if (len(angle_list) > 3):
-        fix_mobilities(td_matrix, td_names, args.E_num,
-                       args.B_num, angle_list)
-
-    header = '# ' + ' '.join(td_names)
-
-    # Prepend 's' to indicated standard deviations
     if args.sigma:
-        snames = ['s' + name for name in td_names]
-        header += ' ' + ' '.join(snames)
+        df = pd.DataFrame(data=np.hstack([data, sigma]),
+                          columns=td_names + ['stddev ' + x for x in td_names])
+    else:
+        df = pd.DataFrame(data=data, columns=td_names)
 
-    # Write header manually to support numpy < 1.7
-    with open(args.of, 'wb') as f:
-        hdr = ''
-        hdr += '# Gas components = {}\n'.format(' '.join(args.gas_comps))
-        hdr += '# Temperature (Kelvin) = {}\n'.format(args.T)
-        hdr += '# Pressure (bar) = {}\n'.format(args.p)
-        hdr += '# Cross sections = {}\n'.format(args.cs)
-        hdr += '# E_num B_num angle_num = {} {} {}\n'.format(
-            args.E_num, args.B_num, args.angle_num)
-        hdr += '# Column names:\n'
-        hdr += header + '\n'
-        f.write(hdr.encode('ascii'))
-        np.savetxt(f, td_matrix, fmt=b'%10.3e')
-
-    print("Results written to: ", args.of)
+    df.to_csv(args.o, index=False)
+    print("Results written to: ", args.o)
