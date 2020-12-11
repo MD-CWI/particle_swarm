@@ -104,16 +104,16 @@ contains
     SWARM_field = field
 
     allocate(tds(SWARM_num_td + pc%n_colls))
-    call init_td(tds(ix_flux_v2), 3, "flux_v2", "(m/s)^2")
-    call init_td(tds(ix_flux_v), 3, "flux_v", "m/s")
-    call init_td(tds(ix_bulk_v), 3, "bulk_v", "m/s")
-    call init_td(tds(ix_flux_diff), 3, "flux_D", "m^2/s")
-    call init_td(tds(ix_bulk_diff), 3, "bulk_D", "m^2/s")
-    call init_td(tds(ix_alpha), 1, "alpha", "1/m")
-    call init_td(tds(ix_eta), 1, "eta", "1/m")
-    call init_td(tds(ix_coll_rate), 1, "coll_rate", "1/s")
-    call init_td(tds(ix_ionization), 1, "ionization", "1/s")
-    call init_td(tds(ix_attachment), 1, "attachment", "1/s")
+    call init_td(tds(ix_flux_v2), 3, "Velocity squared", "m2/s2")
+    call init_td(tds(ix_flux_v), 3, "Drift velocity", "m/s")
+    call init_td(tds(ix_bulk_v), 3, "Bulk drift velocity", "m/s")
+    call init_td(tds(ix_flux_diff), 3, "Diffusion coefficient", "m2/s")
+    call init_td(tds(ix_bulk_diff), 3, "Bulk diffusion coef.", "m2/s")
+    call init_td(tds(ix_alpha), 1, "Townsend ioniz. coef. alpha", "1/m")
+    call init_td(tds(ix_eta), 1, "Townsend attach. coef. eta", "1/m")
+    call init_td(tds(ix_coll_rate), 1, "Total collision rate", "1/s")
+    call init_td(tds(ix_ionization), 1, "Total ionization freq.", "1/s")
+    call init_td(tds(ix_attachment), 1, "Total attachment freq.", "1/s")
 
     allocate(ix_rates(pc%n_colls))
     do n = 1, pc%n_colls
@@ -699,35 +699,38 @@ contains
 
   subroutine SWARM_print_results(tds, pc, verbose)
     use m_units_constants
+    use m_gas
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
     type(pc_t), intent(in)       :: pc
     integer, intent(in)          :: verbose
     integer                      :: i, i_dim
-    real(dp)                     :: fac, tmp, std
+    real(dp)                     :: fac, tmp, std, N0
     real(dp)                     :: energy, mu, rel_error(size(tds))
     logical                      :: magnetic_field_used
     character(len=2)             :: dimnames(3) = ["_x", "_y", "_z"]
 
+    N0 = GAS_number_dens
     i = tds(1)%n_measurements
     fac = sqrt(1.0_dp / (i * (i-1)))
-
     magnetic_field_used = (abs(SWARM_field%Bz) > 0.0_dp)
 
-    if (verbose > 0) &
-         write(*, "(A35,4A12)") "name", "value", "sigma", "convergence", "unit"
-
-    write(*, "(A35,2E12.4,A24)") "E", norm2(SWARM_field%E_vec), 0.0_dp, "V/m"
+    call my_print("Gas number density (1/m3)", N0, 0.0_dp)
+    call my_print("Electric field (V/m)", &
+         norm2(SWARM_field%E_vec), 0.0_dp)
+    call my_print("Electric field / N (Td)", &
+         norm2(SWARM_field%E_vec)/N0*1e21_dp, 0.0_dp)
     if (magnetic_field_used) then
-       write(*, "(A35,2E12.4)") "B", SWARM_field%Bz, 0.0_dp
-       write(*, "(A35,2E12.4)") "angle", SWARM_field%angle_deg, 0.0_dp
-       write(*, "(A35,2E12.4)") "omega_c", SWARM_field%omega_c, 0.0_dp
+       call my_print("Magnetic field (T)", SWARM_field%Bz, 0.0_dp)
+       call my_print("E-B field angle (degree)", &
+            SWARM_field%angle_deg, 0.0_dp)
+       call my_print("omega_c (radian/s)", SWARM_field%omega_c, 0.0_dp)
     end if
 
     ! mean energy
     tmp    = 0.5_dp * UC_elec_mass / UC_elec_volt
     energy = tmp * sum(tds(ix_flux_v2)%val)
     std    = tmp * sqrt(sum(tds(ix_flux_v2)%var)) * fac
-    write(*, "(A35,2E12.4,A24)") "energy", energy, std, "eV"
+    call my_print("Mean energy (eV)", energy, std)
 
     if (magnetic_field_used) then
        ! mobility parallel to E
@@ -735,7 +738,7 @@ contains
             / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
        std = fac * sqrt(dot_product(tds(ix_flux_v)%var,  SWARM_field%E_vec)) &
             / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
-       write(*, "(A35,2E12.4,A24)") "mu_E", mu, std, "m^2/(Vs)"
+       call my_print("mu_E (m2/V/s)", mu, std)
 
        ! mobility parallel to B
        if (abs(SWARM_field%Ez) > sqrt(epsilon(1.0_dp))) then
@@ -745,7 +748,7 @@ contains
           mu = 0
           std = 0
        end if
-       write(*, "(A35,2E12.4,A24)") "mu_B", mu, std, "m^2/(Vs)"
+       call my_print("mu_B (m2/V/s)", mu, std)
 
        ! mobility perpendicular to B (y-velocity over Ey)
        if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp))) then
@@ -755,7 +758,7 @@ contains
           mu = 0
           std = 0
        end if
-       write(*, "(A35,2E12.4,A24)") "mu_xB", mu, std, "m^2/(Vs)"
+       call my_print("mu_xB (m2/V/s)", mu, std)
 
        ! mobility in ExB-direction (x-velocity over Ey = E_perp)
        if (abs(SWARM_field%Ey) > sqrt(epsilon(1.0_dp)) .and. &
@@ -766,20 +769,22 @@ contains
           mu = 0
           std = 0
        end if
-       write(*, "(A35,2E12.4,A24)") "mu_ExB", mu, std, "m^2/(Vs)"
+       call my_print("mu_ExB (m2/V/s)", mu, std)
     else
        ! mobility parallel to E
        mu = -dot_product(tds(ix_flux_v)%val,  SWARM_field%E_vec) &
             / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
        std = fac * sqrt(dot_product(tds(ix_flux_v)%var,  SWARM_field%E_vec)) &
             / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
-       write(*, "(A35,2E12.4,A24)") "mu_flux", mu, std, "m^2/(Vs)"
+       call my_print("Mobility (m2/V/s)", mu, std)
+       call my_print("Mobility *N (1/m/V/s)", mu*N0, std*N0)
 
        mu = -dot_product(tds(ix_bulk_v)%val,  SWARM_field%E_vec) &
             / max(epsilon(1.0_dp), sum(SWARM_field%E_vec**2))
        std = fac * sqrt(dot_product(tds(ix_bulk_v)%var,  SWARM_field%E_vec)) &
             / max(epsilon(1.0_dp), norm2(SWARM_field%E_vec)**1.5_dp)
-       write(*, "(A35,2E12.4,A24)") "mu_bulk", mu, std, "m^2/(Vs)"
+       call my_print("Bulk mobility (m2/V/s)", mu, std)
+       call my_print("Bulk mobility *N (1/m/V/s)", mu*N0, std*N0)
     end if
 
     call get_accuracy(tds, rel_error)
@@ -787,22 +792,35 @@ contains
     ! The other swarm parameters
     do i = 1, size(tds)
        if (tds(i)%n_dim == 1) then
-          write(*, "(A35,2E12.4,F12.4,A12)") &
-               trim(tds(i)%description), &
-               tds(i)%val(1), sqrt(tds(i)%var(1)) * fac, &
-               rel_error(i), trim(tds(i)%unit)
+          call my_print(trim(tds(i)%description) // " (" // &
+               trim(tds(i)%unit) // ")", tds(i)%val(1), &
+               sqrt(tds(i)%var(1)) * fac, rel_error(i))
        else
           do i_dim = 1, tds(i)%n_dim
-             write(*, "(A35,2E12.4,F12.4,A12)") &
-                  trim(tds(i)%description) // dimnames(i_dim),&
-                  tds(i)%val(i_dim), &
-                  sqrt(tds(i)%var(i_dim)) * fac, &
-                  rel_error(i), trim(tds(i)%unit)
+             call my_print(trim(tds(i)%description) // dimnames(i_dim) &
+                  // " (" // trim(tds(i)%unit) // ")", &
+                  tds(i)%val(i_dim), sqrt(tds(i)%var(i_dim)) * fac, &
+                  rel_error(i))
           end do
        end if
     end do
 
   end subroutine SWARM_print_results
+
+  subroutine my_print(name, val, stddev, convergence)
+    character(len=*), intent(in)   :: name
+    real(dp), intent(in)           :: val, stddev
+    real(dp), intent(in), optional :: convergence
+    character(len=40)              :: name_left
+    character(len=*), parameter    :: fmtstr = "(A40,ES14.6,ES10.2,F7.2)"
+
+    name_left = name
+    if (present(convergence)) then
+       write(*, fmtstr) name_left, val, stddev, convergence
+    else
+       write(*, fmtstr) name_left, val, stddev, 0.0_dp
+    end if
+  end subroutine my_print
 
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant electric and magnetic field, using the analytic solution.
