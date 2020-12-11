@@ -14,21 +14,19 @@ program particle_swarm
   type(SWARM_field_t)           :: field ! The field configuration
   type(SWARM_td_t), allocatable :: td(:)
   real(dp)                      :: max_cpu_time
-  logical                       :: dry_run, visualize_only
+  logical                       :: visualize_only
 
   call initialize_all(cfg)
 
-  if (.not. dry_run) then
-     call get_field_configuration(cfg, field)
-     call CFG_get(cfg, "swarm_size", swarm_size)
-     call SWARM_initialize(pc, cfg, td, field)
+  call get_field_configuration(cfg, field)
+  call CFG_get(cfg, "swarm_size", swarm_size)
+  call SWARM_initialize(pc, cfg, td, field)
 
-     if (visualize_only) then
-        call SWARM_visualize(pc, swarm_size, cfg)
-     else
-        call SWARM_get_data(pc, swarm_size, td, verbose, max_cpu_time)
-        call SWARM_print_results(td, pc, verbose)
-     end if
+  if (visualize_only) then
+     call SWARM_visualize(pc, swarm_size, cfg)
+  else
+     call SWARM_get_data(pc, swarm_size, td, verbose, max_cpu_time)
+     call SWARM_print_results(td, pc, verbose)
   end if
 
 contains
@@ -50,7 +48,6 @@ contains
     character(len=20), allocatable :: gas_names(:)
     real(dp), allocatable          :: gas_fracs(:)
     type(CS_t), allocatable        :: cross_secs(:)
-    logical                        :: consecutive_run
 
     ! Create default parameters for the simulation (routine contained below)
     call create_sim_config(cfg)
@@ -66,7 +63,6 @@ contains
        call omp_set_num_threads(num_threads)
     end if
 
-    call CFG_get(cfg, "dry_run", dry_run)
     call CFG_get(cfg, "visualize_only", visualize_only)
 
     call CFG_get_size(cfg, "gas_components", n_gas_comp)
@@ -84,77 +80,59 @@ contains
     ! Initialize gas and electric field module
     call GAS_initialize(gas_names, gas_fracs, pressure, temperature)
 
-    call CFG_get(cfg, "consecutive_run", consecutive_run)
     call CFG_get(cfg, "output_dir", output_dir)
 
-    if (.not. consecutive_run) then
-       tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_config.txt"
-       if (verbose > 0) print *, "Writing configuration to ", trim(tmp_name)
-       call CFG_write(cfg, trim(tmp_name))
+    tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_config.txt"
+    if (verbose > 0) print *, "Writing configuration to ", trim(tmp_name)
+    call CFG_write(cfg, trim(tmp_name))
 
-       call CFG_get(cfg, "gas_file", cs_file)
-       call CFG_get(cfg, "particle_max_energy_ev", max_ev)
+    call CFG_get(cfg, "gas_file", cs_file)
+    call CFG_get(cfg, "particle_max_energy_ev", max_ev)
 
-       do nn = 1, n_gas_comp
-          call CS_add_from_file(trim(cs_file), &
-               trim(gas_names(nn)), gas_fracs(nn) * &
-               GAS_number_dens, max_ev, cross_secs)
-       end do
+    do nn = 1, n_gas_comp
+       call CS_add_from_file(trim(cs_file), &
+            trim(gas_names(nn)), gas_fracs(nn) * &
+            GAS_number_dens, max_ev, cross_secs)
+    end do
 
-       call CS_write_summary(cross_secs, &
-            trim(output_dir) // "/" // trim(swarm_name) // "_cs_summary.txt")
+    call CS_write_summary(cross_secs, &
+         trim(output_dir) // "/" // trim(swarm_name) // "_cs_summary.txt")
 
-       call CFG_get(cfg, "particle_lkptbl_size", tbl_size)
-       call CFG_get(cfg, "swarm_size", swarm_size)
+    call CFG_get(cfg, "particle_lkptbl_size", tbl_size)
+    call CFG_get(cfg, "swarm_size", swarm_size)
 
-       call CFG_get(cfg, "particle_rng_seed", rng_seed)
-       if (all(rng_seed == 0)) rng_seed = get_random_seed()
+    call CFG_get(cfg, "particle_rng_seed", rng_seed)
+    if (all(rng_seed == 0)) rng_seed = get_random_seed()
 
-       if (visualize_only) then
-          call CFG_get(cfg, "visualize_max_particles", max_num_part)
-       else
-          ! Allocate storage for 8 times the swarm size. There are checks in place
-          ! to make sure it cannot grow to such a large size.
-          max_num_part = 8 * swarm_size
-       end if
-
-       call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
-       call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
-
-       if (verbose > 0) then
-          print *, "--------------------"
-          print *, "Gas information"
-          write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
-          print *, ""
-          print *, "Component - fraction"
-          do nn = 1, n_gas_comp
-             write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
-                  gas_fracs(nn)
-          end do
-          print *, ""
-       end if
-
-       tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_coeffs.txt"
-       if (verbose > 0) &
-            print *, "Writing colrate table (as text) to ", trim(tmp_name)
-       call IO_write_coeffs(pc, trim(tmp_name))
-
-       tmp_name = trim(output_dir) // "/" // trim(swarm_name)
-       if (verbose > 0)then
-          print *, "Writing particle params (raw) to ", &
-               trim(tmp_name) // "_params.dat"
-          print *, "Writing particle lookup table (raw) to ", &
-               trim(tmp_name) // "_lt.dat"
-       end if
-       call pc%to_file(trim(tmp_name) // "_params.dat", &
-            trim(tmp_name) // "_lt.dat")
-       if (verbose > 0) print *, "--------------------"
-
-    else ! Restarted run (can only change field!)
-       tmp_name = trim(output_dir) // "/" // trim(swarm_name)
-       call pc%init_from_file(trim(tmp_name) // "_params.dat", &
-            trim(tmp_name) // "_lt.dat", rng_seed)
+    if (visualize_only) then
+       call CFG_get(cfg, "visualize_max_particles", max_num_part)
+    else
+       ! Allocate storage for 8 times the swarm size. There are checks in place
+       ! to make sure it cannot grow to such a large size.
+       max_num_part = 8 * swarm_size
     end if
+
+    call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
+    call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
+
+    if (verbose > 0) then
+       print *, "--------------------"
+       print *, "Gas information"
+       write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
+       print *, ""
+       print *, "Component - fraction"
+       do nn = 1, n_gas_comp
+          write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
+               gas_fracs(nn)
+       end do
+       print *, ""
+    end if
+
+    tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_coeffs.txt"
+    if (verbose > 0) &
+         print *, "Writing colrate table (as text) to ", trim(tmp_name)
+    call IO_write_coeffs(pc, trim(tmp_name))
+    if (verbose > 0) print *, "--------------------"
 
     call CFG_get(cfg, "particle_mover", particle_mover)
     call CFG_get(cfg, "magnetic_field", magnetic_field)
@@ -191,10 +169,6 @@ contains
          "Maximum CPU run time (in seconds)")
     call CFG_add(cfg, "num_threads", -1, &
          "Number of OpenMP threads to use (default: all)")
-    call CFG_add(cfg, "consecutive_run", .false., &
-         "True means: use data from a previous run with the same name")
-    call CFG_add(cfg, "dry_run", .false., &
-         "True means: only write simulation settings, no results")
     call CFG_add(cfg, "visualize_only", .false., &
          "True means: only generate files to visualize swarm")
     call CFG_add(cfg, "visualize_max_particles", 100*1000, &
