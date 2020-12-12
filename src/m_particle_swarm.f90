@@ -648,11 +648,15 @@ contains
     real(dp), parameter          :: eps = 1e-100_dp
 
     do i = 1, size(rel_error)
-       n      = tds(i)%n_measurements
+       n = tds(i)%n_measurements
        ! Below we use the norm for vector-based transport data, so that
        ! orientation of the field should not matter
-       mean   = norm2(tds(i)%val)
-       var    = maxval(tds(i)%var / (n-1)) / n ! Maximal variance
+       mean = norm2(tds(i)%val)
+       if (n > 1) then
+          var = maxval(tds(i)%var / (n-1)) / n ! Maximal variance
+       else
+          var = maxval(tds(i)%var / (n)) / n ! Maximal variance
+       end if
        stddev = sqrt(var)                      ! Standard deviation of the mean
 
        rel_error(i) = min(stddev / max(tds(i)%rel_acc * mean, eps), &
@@ -731,7 +735,13 @@ contains
 
     N0 = GAS_number_dens
     i = tds(1)%n_measurements
-    fac = sqrt(1.0_dp / (i * (i-1)))
+
+    if (i > 1) then
+       fac = sqrt(1.0_dp / (i * (i-1)))
+    else
+       fac = 1.0_dp             ! To prevent division by zero
+    end if
+
     magnetic_field_used = (abs(SWARM_field%Bz) > 0.0_dp)
 
     call print_td("Gas number density (1/m3)", N0, 0.0_dp)
