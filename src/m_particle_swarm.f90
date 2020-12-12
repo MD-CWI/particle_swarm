@@ -318,58 +318,77 @@ contains
     type(part_stats_t), intent(inout) :: ps
     real(dp), intent(in)              :: dt
     integer                           :: ix, num_part
-    real(dp)                          :: inv_n_samples, inv_num_part
-    real(dp)                          :: v(3), v2(3), corr_fac, x2(3)
+    real(dp)                          :: fac, inv_n_samples
+    real(dp)                          :: x(3), v(3), corr_fac, sum_x2(3)
+    real(dp)                          :: sum_cov(3), sum_v2(3)
+    real(dp)                          :: sum_v(3), sum_x(3)
+    real(dp)                          :: mean_v2(3), mean_x2(3), mean_v(3)
     real(dp)                          :: mean_x(3), bulk_v(3), bulk_dif(3)
     real(dp)                          :: rates(pc%n_colls)
     real(dp)                          :: sum_rates(pc%n_colls)
-    type(PC_part_t)                   :: part
 
-    num_part     = pc%get_num_sim_part()
-    inv_num_part = 1.0_dp/num_part
-    corr_fac     = num_part/(num_part-1.0_dp)
-    sum_rates    = 0.0_dp
+    num_part  = pc%get_num_sim_part()
+    corr_fac  = num_part/(num_part-1.0_dp)
+    sum_x     = 0
+    sum_x2    = 0
+    sum_v     = 0
+    sum_v2    = 0
+    sum_rates = 0
+    sum_cov   = 0
 
-    call recenter_swarm(pc, mean_x)
+    !$omp parallel do reduction(+:sum_x,sum_v,sum_v2)
+    do ix = 1, num_part
+       sum_x = sum_x + pc%particles(ix)%x
+       sum_v = sum_v + pc%particles(ix)%v
+       sum_v2 = sum_v2 + pc%particles(ix)%v**2
+    end do
+    !$omp end parallel do
+
+    mean_x = sum_x / num_part
+    mean_v = sum_v / num_part
+    mean_v2 = sum_v2 / num_part
+
+    !$omp parallel do private(x,v,rates) reduction(+:sum_rates, sum_cov, sum_x2)
+    do ix = 1, num_part
+       ! Translate to have zero mean
+       pc%particles(ix)%x = pc%particles(ix)%x - mean_x
+
+       x = pc%particles(ix)%x
+       v = pc%particles(ix)%v
+       sum_cov = sum_cov + (x - mean_x) * (v - mean_v)
+       sum_x2 = sum_x2 + x**2
+
+       call pc%get_coll_rates(norm2(v), rates)
+       sum_rates = sum_rates + rates
+    end do
+    !$omp end parallel do
+
+    ps%n_samples  = ps%n_samples + num_part
+    inv_n_samples = 1.0_dp / ps%n_samples
+    fac           = num_part * inv_n_samples
 
     ! Update bulk velocity
     bulk_v    = mean_x/dt
-    ps%bulk_v = ps%bulk_v + (bulk_v - ps%bulk_v) * &
-         num_part / (ps%n_samples + num_part)
+    ps%bulk_v = ps%bulk_v + (bulk_v - ps%bulk_v) * fac
 
     ! Update bulk diffusion coefficient
-    do ix = 1, 3
-       x2(ix) = sum(pc%particles(1:num_part)%x(ix)**2) / num_part
-    end do
-    bulk_dif = (x2 - ps%x2_prev) / (2 * dt)
+    mean_x2     = sum_x2 / num_part
+    bulk_dif    = (mean_x2 - ps%x2_prev) / (2 * dt)
+    ps%x2_prev  = mean_x2
+    ps%bulk_dif = ps%bulk_dif + (bulk_dif - ps%bulk_dif) * fac
 
-    ps%x2_prev = x2
-    ps%bulk_dif = ps%bulk_dif + (bulk_dif - ps%bulk_dif) * &
-         num_part / (ps%n_samples + num_part)
+    ! Update flux coefficients
+    ps%flux_v  = ps%flux_v + (mean_v - ps%flux_v) * fac
+    ps%flux_v2 = ps%flux_v2 + (mean_v2 - ps%flux_v2) * fac
+    ! Note that no correction is needed because <x> = 0, see
+    ! https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+    ps%cov_xv  = ps%cov_xv + sum_cov * corr_fac
 
-    do ix = 1, num_part
-       part          = pc%particles(ix)
-       ps%n_samples  = ps%n_samples + 1
-       inv_n_samples = 1.0_dp / ps%n_samples
-       v             = part%v
-       v2            = v**2
-       ps%flux_v     = ps%flux_v + (v - ps%flux_v) * inv_n_samples
-
-       ! This placing is intentional:
-       ! http://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
-       ps%cov_xv = ps%cov_xv + (v - ps%flux_v) * part%x * corr_fac
-
-       ! ps%cov_v2_xv  = ps%cov_v2_xv + v2 * (v - ps%v) * part%x
-       ps%flux_v2 = ps%flux_v2 + (v2 - ps%flux_v2) * inv_n_samples
-
-       ! Compute this sum in the loop to reduce computational cost
-       call pc%get_coll_rates(sqrt(sum(v2)), rates)
-       ps%rates = ps%rates + (rates - ps%rates) * inv_n_samples
-    end do
-
+    ! Update collision rates
+    ps%rates     = ps%rates + (sum_rates - ps%rates*num_part) * inv_n_samples
     ps%coll_rate = sum(ps%rates)
-    ps%i_rate = sum(ps%rates(ionization_colls))
-    ps%a_rate = sum(ps%rates(attachment_colls))
+    ps%i_rate    = sum(ps%rates(ionization_colls))
+    ps%a_rate    = sum(ps%rates(attachment_colls))
 
   end subroutine update_particle_stats
 
