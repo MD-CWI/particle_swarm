@@ -652,8 +652,8 @@ contains
           call get_accuracy(tds, rel_error)
           if (verbose > 0) then
              imax = maxloc(rel_error)
-             write(*, '(I6,A35,F12.4)') n_swarms, 'max rel. error (' // &
-                  trim(tds(imax(1))%description) // ')', rel_error(imax(1))
+             write(*, '(I6,A40,F12.4)') n_swarms, &
+                  trim(tds(imax(1))%description), rel_error(imax(1))
           end if
 
           call cpu_time(t1)
