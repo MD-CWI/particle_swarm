@@ -1,5 +1,6 @@
 module m_particle_swarm
   use m_particle_core
+  use iso_fortran_env, only: int64
 
   implicit none
   private
@@ -59,7 +60,7 @@ module m_particle_swarm
   !> Type to collect particle statistics / properties
   type part_stats_t
      type(SWARM_field_t) :: field       !< The field configuration
-     integer             :: n_samples   !< Number of samples
+     integer(int64)      :: n_samples   !< Number of samples
      real(dp)            :: coll_rate   !< Collision rate
      real(dp)            :: i_rate      !< Ionization rate
      real(dp)            :: a_rate      !< Attachment rate
