@@ -251,18 +251,24 @@ contains
     part%x = 0.0_dp
   end subroutine reset_part_x
 
-  subroutine resize_swarm(pc, new_size)
+  subroutine resize_swarm(pc, goal_size)
     use m_random
+    use m_units_constants
     type(PC_t), intent(inout) :: pc
-    integer, intent(in) :: new_size
-
-    integer :: ix, cur_size
-    real(dp) :: chance
-    type(PC_part_t) :: part
+    !> Desired size of the swarm
+    integer, intent(in)       :: goal_size
+    integer                   :: ix, ix_group, cur_size, group_size
+    real(dp)                  :: chance
+    type(PC_part_t)           :: part
 
     cur_size = pc%get_num_sim_part()
 
-    if (new_size >= 2 * cur_size) then
+    if (cur_size <= 1 .or. goal_size <= 1) &
+         error stop "both goal_size and current size should be > 1"
+
+    if (cur_size <= goal_size/sqrt(2.0_dp)) then
+       ! When the swarm decreases in size, aim for a size between
+       ! goal_size/sqrt(2) and sqrt(2) * goal_size
        do
           ! Double particles
           do ix = 1, cur_size
@@ -270,17 +276,39 @@ contains
              call pc%add_part(part)
           end do
           cur_size = cur_size * 2
-          if (new_size < 2 * cur_size) exit
+          if (cur_size >= goal_size) exit
        end do
-    else if (new_size < cur_size/2) then
-       ! Reduce number of particles
-       chance = new_size / real(cur_size, dp)
-       do ix = 1, cur_size
-          if (pc%rng%unif_01() > chance) call pc%remove_part(ix)
+    else if (cur_size >= goal_size * 2) then
+       ! Remove particles in stratified way, by first putting them in groups,
+       ! from which we remove one particle. Keep size (roughly) between
+       ! goal_size and 2 * goal_size.
+       chance = goal_size / real(cur_size, dp)
+       group_size = max(2, nint(1/chance))
+
+       ! Sort by energy
+       call pc%sort(get_v2)
+
+       ! Loop over groups
+       do ix_group = 1, cur_size/group_size
+          ! First index in group
+          ix = (ix_group - 1) * group_size + 1
+          ! Add number between 0 and group_size - 1
+          ix = ix + floor(pc%rng%unif_01() * group_size)
+          call pc%remove_part(ix)
+       end do
+
+       ! Handle particles outside last group
+       do ix = (cur_size/group_size)*group_size+1, cur_size
+          if (pc%rng%unif_01() > 1.0_dp/group_size) call pc%remove_part(ix)
        end do
        call pc%clean_up()
     end if
   end subroutine resize_swarm
+
+  pure real(dp) function get_v2(part)
+    type(PC_part_t), intent(in) :: part
+    get_v2 = sum(part%v**2)
+  end function get_v2
 
   subroutine initialize_particle_stats(ps, pc)
     type(part_stats_t), intent(inout) :: ps
