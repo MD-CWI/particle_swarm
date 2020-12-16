@@ -34,7 +34,7 @@ module m_particle_swarm
   integer, allocatable :: attachment_colls(:)
 
   !> Number of measurements per collision time
-  real(dp), parameter :: n_measurements_per_collision = 1.0_dp
+  real(dp), parameter :: measurements_per_collision = 1.0_dp
 
   !> Type for storing transport data
   type SWARM_td_t
