@@ -33,6 +33,9 @@ module m_particle_swarm
   !> Indices of attachment collisions
   integer, allocatable :: attachment_colls(:)
 
+  !> Number of measurements per collision time
+  real(dp), parameter :: n_measurements_per_collision = 1.0_dp
+
   !> Type for storing transport data
   type SWARM_td_t
      character(len=40)     :: description    !< Description
@@ -625,8 +628,9 @@ contains
        t_relax        = fac * sum(ps%flux_v2) / &
             abs(dot_product(SWARM_field%E_vec, ps%flux_v))
        t_measure      = t_relax
-       ! Aim for one measurement per collision time
-       n_measurements = nint(t_measure * ps%coll_rate)
+       ! Aim for measurements_per_collision measurements per collision time
+       n_measurements = nint(t_measure * ps%coll_rate * &
+            measurements_per_collision)
        ! Limit range of n_measurements
        n_measurements = min(10000, max(10, n_measurements))
        dt             = t_measure / n_measurements
