@@ -424,13 +424,14 @@ contains
 
   end subroutine update_particle_stats
 
-  subroutine update_td_from_ps(tds, ps)
+  subroutine update_td_from_ps(tds, ps, pc)
     use m_units_constants
     use m_gas
     type(SWARM_td_t), intent(inout) :: tds(:)
     type(part_stats_t), intent(in)  :: ps
+    type(PC_t), intent(in)          :: pc
     integer                         :: n
-    real(dp)                        :: inv_N
+    real(dp)                        :: species_density
 
     call update_td(tds(ix_flux_v2), ps%flux_v2)
     call update_td(tds(ix_flux_v), ps%flux_v)
@@ -443,9 +444,10 @@ contains
     call update_td(tds(ix_ionization), [ps%i_rate])
     call update_td(tds(ix_attachment), [ps%a_rate])
 
-    inv_N = 1/GAS_number_dens
     do n = 1, size(ix_rates)
-       call update_td(tds(ix_rates(n)), [ps%rates(n) * inv_N])
+       species_density = GAS_get_fraction(trim(pc%cross_secs(n)%gas_name)) * &
+            GAS_number_dens
+       call update_td(tds(ix_rates(n)), [ps%rates(n) / species_density])
     end do
 
     ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
@@ -650,7 +652,7 @@ contains
           call update_particle_stats(pc, ps, dt)
        end do
 
-       call update_td_from_ps(tds, ps)
+       call update_td_from_ps(tds, ps, pc)
 
        if (verbose > 1) call SWARM_print_results(tds, pc, verbose)
 
