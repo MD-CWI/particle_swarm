@@ -66,8 +66,8 @@ if __name__ == '__main__':
         for c in df.columns.values:
             m = pattern.match(c)
             if m:
-                print('e + ' + m.group(1) + ' -> e + e + ' +
-                      m.group(1) + '+,field_table,' + m.group(0))
+                print('e + ' + m.group(1) + ' -> ' +
+                      m.group(1) + '-,field_table,' + m.group(0))
         print('-----------------------\n')
 
         write_col(df, x, 'Mean energy (eV)')
