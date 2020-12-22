@@ -105,9 +105,15 @@ module m_particle_core
      !> Whether a collision should be stored as an event
      logical, allocatable         :: coll_is_event(:)
 
-     !> Lookup table with collision rates
+     !> Lookup table with collision rates. Stored separately from ratesum_lt to
+     !> prevent loss of significant digits (e.g. in 3-body processes).
      type(LT_t)                   :: rate_lt
-     real(dp)                     :: max_rate, inv_max_rate
+     !> Sum of the collision rates, for null collision method
+     type(LT_t)                   :: ratesum_lt
+     !> Maximum collision rate
+     real(dp)                     :: max_rate
+     !> Inverse of maximum collision rate
+     real(dp)                     :: inv_max_rate
 
      !> List of particles to be removed
      type(LL_int_head_t)          :: clean_list
@@ -354,6 +360,7 @@ contains
     self%n_part       = 0
     allocate(self%particles(n_part_max))
 
+    call LT_from_file(self%ratesum_lt, lt_file)
     call LT_from_file(self%rate_lt, lt_file)
 
     if (present(rng_seed)) then
@@ -380,6 +387,7 @@ contains
     write(my_unit) self%colls
     close(my_unit)
 
+    call LT_to_file(self%ratesum_lt, lt_file)
     call LT_to_file(self%rate_lt, lt_file)
   end subroutine to_file
 
@@ -647,7 +655,7 @@ contains
          if (part%w <= PC_dead_weight) return
 
          new_vel = norm2(part%v)
-         cIx     = get_coll_index(self%rate_lt, self%n_colls, self%max_rate, &
+         cIx = get_coll_index(self%ratesum_lt, self%n_colls, self%max_rate, &
               new_vel, rng%unif_01())
 
          if (cIx > 0) then
@@ -738,16 +746,16 @@ contains
     sample_coll_time = -log(1 - unif_01) * inv_max_rate
   end function sample_coll_time
 
-  integer function get_coll_index(rate_lt, n_colls, max_rate, &
+  integer function get_coll_index(ratesum_lt, n_colls, max_rate, &
        velocity, rand_unif)
-    type(LT_t), intent(in) :: rate_lt
+    type(LT_t), intent(in) :: ratesum_lt
     real(dp), intent(IN)   :: velocity, rand_unif, max_rate
     integer, intent(in)    :: n_colls
     real(dp)               :: rand_rate
     real(dp)               :: buffer(PC_max_num_coll)
 
     ! Fill an array with interpolated rates
-    buffer(1:n_colls) = LT_get_mcol(rate_lt, velocity)
+    buffer(1:n_colls) = LT_get_mcol(ratesum_lt, velocity)
     rand_rate         = rand_unif * max_rate
     get_coll_index    = find_index_adaptive(buffer(1:n_colls), rand_rate)
 
@@ -1195,8 +1203,9 @@ contains
        sum_rate_list(ix) = 0
     end do
 
-    ! Create collision rate table
+    ! Create collision rate tables
     self%rate_lt = LT_create(0.0_dp, max_vel, table_size, n_colls)
+    self%ratesum_lt = LT_create(0.0_dp, max_vel, table_size, n_colls)
 
     do i_c = 1, n_colls
        self%colls(i_c) = cross_secs(i_c)%coll
@@ -1209,10 +1218,12 @@ contains
           rate_list(i_row) = rate_list(i_row) * vel_list(i_row)
        end do
 
+       call LT_set_col(self%rate_lt, i_c, vel_list, rate_list)
+
        ! We store the sum of the collision rates with index up to i_c, this
        ! makes the null-collision method straightforward.
        sum_rate_list = sum_rate_list + rate_list
-       call LT_set_col(self%rate_lt, i_c, vel_list, sum_rate_list)
+       call LT_set_col(self%ratesum_lt, i_c, vel_list, sum_rate_list)
     end do
 
     self%max_rate = maxval(sum_rate_list)
@@ -1249,6 +1260,7 @@ contains
 
     ! Create collision rate table
     self%rate_lt = LT_create(0.0_dp, max_vel, table_size, n_colls)
+    self%ratesum_lt = LT_create(0.0_dp, max_vel, table_size, n_colls)
 
     do i_c = 1, n_colls
        self%colls(i_c) = rate_funcs(i_c)%coll
@@ -1258,10 +1270,12 @@ contains
           rate_list(i_row) = rate_funcs(i_c)%ptr(vel_list(i_row))
        end do
 
+       call LT_set_col(self%rate_lt, i_c, vel_list, rate_list)
+
        ! We store the sum of the collision rates with index up to i_c, this
        ! makes the null-collision method straightforward.
        sum_rate_list = sum_rate_list + rate_list
-       call LT_set_col(self%rate_lt, i_c, vel_list, sum_rate_list)
+       call LT_set_col(self%ratesum_lt, i_c, vel_list, sum_rate_list)
     end do
 
     self%max_rate = maxval(sum_rate_list)
@@ -1691,14 +1705,9 @@ contains
 
   subroutine get_coll_rates(self, velocity, coll_rates)
     class(PC_t), intent(in) :: self
-    real(dp), intent(in) :: velocity
+    real(dp), intent(in)    :: velocity
     real(dp), intent(inout) :: coll_rates(:)
-    integer :: i
     coll_rates = LT_get_mcol(self%rate_lt, velocity)
-
-    do i = size(coll_rates), 2, -1
-       coll_rates(i) = coll_rates(i) - coll_rates(i-1)
-    end do
   end subroutine get_coll_rates
 
   subroutine get_colls(self, out_colls)
