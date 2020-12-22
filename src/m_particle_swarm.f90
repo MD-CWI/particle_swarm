@@ -142,7 +142,7 @@ contains
           write(name, '(A,I0,A,A)') "C", n, " " // trim(gas) // &
                " Elastic"
        end select
-       call init_td(tds(ix_rates(n)), 1, name, "m3/s")
+       call init_td(tds(ix_rates(n)), 1, name, "1/s")
     end do
 
     ! Get accuracy requirements
@@ -426,9 +426,11 @@ contains
 
   subroutine update_td_from_ps(tds, ps)
     use m_units_constants
+    use m_gas
     type(SWARM_td_t), intent(inout) :: tds(:)
     type(part_stats_t), intent(in)  :: ps
     integer                         :: n
+    real(dp)                        :: inv_N
 
     call update_td(tds(ix_flux_v2), ps%flux_v2)
     call update_td(tds(ix_flux_v), ps%flux_v)
@@ -441,8 +443,9 @@ contains
     call update_td(tds(ix_ionization), [ps%i_rate])
     call update_td(tds(ix_attachment), [ps%a_rate])
 
+    inv_N = 1/GAS_number_dens
     do n = 1, size(ix_rates)
-       call update_td(tds(ix_rates(n)), [ps%rates(n)])
+       call update_td(tds(ix_rates(n)), [ps%rates(n) * inv_N])
     end do
 
     ! td(7)     = abs(ps%v2_v(3) / (fld * ps%v2))           ! Energy mobility
