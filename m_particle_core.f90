@@ -588,26 +588,23 @@ contains
 
     self%particles(1:self%n_part)%t_left = dt
 
-    !$omp parallel private(n, tid, n_lo, n_hi, buffer)
+    coll_ledger_incr = 0.0_dp
+
+    !$omp parallel private(n, tid, n_lo, n_hi, buffer) reduction(+:coll_ledger_incr)
     call init_buffer(buffer)    ! Make sure private copies are initialized
     tid     = omp_get_thread_num() + 1
     n_lo    = 1
 
-    coll_ledger_incr = 0.0_dp
-
     do
        n_hi = self%n_part
        !$omp barrier
-       !$omp do reduction(+:coll_ledger_incr)
+       !$omp do
        do n = n_lo, n_hi
           call self%move_and_collide(n, prng%rngs(tid), buffer, coll_ledger_incr)
           ! Make sure buffers are not getting too full
           call handle_buffer(self, buffer, PC_advance_buf_size/2)
        end do
        !$omp end do
-
-       ! Add the new collisions to the collision_ledger
-       self%coll_ledger = self%coll_ledger + coll_ledger_incr
 
        ! Ensure buffers are empty at the end of the loop
        call handle_buffer(self, buffer, 0)
@@ -623,6 +620,9 @@ contains
        end if
     end do
     !$omp end parallel
+
+    ! Add the new collisions to the collision_ledger
+    self%coll_ledger = self%coll_ledger + coll_ledger_incr
 
   end subroutine advance_openmp_step
 
