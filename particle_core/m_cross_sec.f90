@@ -63,27 +63,50 @@ module m_cross_sec
   public :: CS_add_from_file
   public :: CS_write_summary
 
+  ! Types of behaviours for dealing with data outside of the input data range
+  integer, public :: CS_OutOfBounds_Throw = 0
+  integer, public :: CS_OutOfBounds_Constant = 1
+  integer, public :: CS_OutOfBounds_Zero = 2
+  integer, public :: CS_OutOfBounds_Linear = 3
+
 contains
 
   ! Search 'filename' for cross section data concerning 'gas_name'
   subroutine CS_add_from_file(filename, gas_name, number_dens, &
-       req_energy, cross_secs)
+       req_energy, cross_secs, opt_out_of_bounds_lower, opt_out_of_bounds_upper)
     use m_units_constants
     use iso_fortran_env, only: error_unit
     character(len=*), intent(IN)           :: filename, gas_name
     real(dp), intent(in)                   :: number_dens
     real(dp), intent(in)                   :: req_energy
     type(CS_t), intent(inout), allocatable :: cross_secs(:)
-
+    integer, intent(in), optional          :: opt_out_of_bounds_lower, opt_out_of_bounds_upper
+   
     type(CS_t), allocatable :: cs_cpy(:)
     type(CS_t)              :: cs_buf(max_processes_per_gas)
     integer                 :: n, cIx, nL, n_rows, col_type
     integer                 :: my_unit, io_state, len_gas_name
     character(LEN=name_len) :: lineFMT, unit_string
     character(LEN=line_len) :: line, prev_line
-    real(dp)                :: tempArray(2, max_num_rows)
+    real(dp)                :: tempArray(2, max_num_rows), temp
     real(dp)                :: x_scaling, y_scaling, tmp_value
     real(dp)                :: two_reals(2)
+    integer                 :: out_of_bounds_lower, out_of_bounds_upper
+
+    ! Default behaviour for when the input data does not go up to the upper bound energy (req_energy)
+    if (.not. present(opt_out_of_bounds_upper)) then
+      out_of_bounds_upper = CS_OutOfBounds_Throw
+    else
+      out_of_bounds_upper = opt_out_of_bounds_upper
+    end if
+
+
+    ! Default behavior for data at lower energies than the input data
+    if (.not. present(opt_out_of_bounds_lower)) then
+      out_of_bounds_lower = CS_OutOfBounds_Constant
+    else
+      out_of_bounds_lower = opt_out_of_bounds_lower
+    end if
 
     my_unit      = 333
     nL           = 0 ! Set the number of lines to 0
@@ -237,6 +260,84 @@ contains
           error stop
        end if
 
+
+       ! Check whether the tables that have been read in go up to high enough
+       ! energies for our simulation. They can also have 0.0 as their highest
+       ! listed cross section, in which case we assume the cross section is 0.0
+       ! for all higher energies
+       ! Cross sections will be taken as constant for energies above the ones found inside the tables.
+       if (tempArray(1, n_rows) < req_energy .and. tempArray(2, n_rows) > 0.0D0) then
+         if (out_of_bounds_upper == CS_OutOfBounds_Throw) then
+            !CS_OutOfBounds_Throw an error
+            write(error_unit, *) "CS_read_file error: cross section data at line ", &
+                  nL, " does not go up to high enough x-values (energy)."
+            write(error_unit, *) "Required: ", req_energy, "found: ", tempArray(1, n_rows)
+            error stop
+         else if (out_of_bounds_upper == CS_OutOfBounds_Zero) then
+            ! Add an extra line to the end of the input data with a cross section of 0
+            ! and an energy slightly higher than the last value
+            if (n_rows < max_num_rows) then
+               n_rows = n_rows + 1
+               tempArray(1, n_rows) = tempArray(1, n_rows - 1) * (1 + epsilon(1.0_dp))
+               tempArray(2, n_rows) = 0
+            else
+               write(error_unit, *) "CS_read_file error: too many rows in tempArray ", &
+                "when adjusting for out of bounds upper method: ", out_of_bounds_upper
+               error stop
+            end if
+         else if (out_of_bounds_upper == CS_OutOfBounds_Linear) then
+            ! Linearly extrapolate from the last value in the table to req_energy. 
+            ! If this cross section value becomes negative we set it to 0 and warn the user
+            if (n_rows < max_num_rows) then
+               tempArray(1, n_rows + 1) = req_energy
+               temp = (req_energy - tempArray(1, n_rows - 1)) / (tempArray(1, n_rows) - tempArray(1, n_rows - 1))
+               tempArray(2, n_rows + 1) = (1 - temp) * tempArray(2, n_rows - 1) + temp * tempArray(2, n_rows)
+               
+               n_rows = n_rows + 1
+
+               if (tempArray(2, n_rows) < 0) then
+                  tempArray(2, n_rows) = 0
+                  write(error_unit, *) "CS_read_file warning: Linearly extrapolating cross section to ", req_energy, &
+                   " eV resulted in a negative cross section. Setting this cross section to 0."
+               end if
+            else
+               write(error_unit, *) "CS_read_file error: too many rows in tempArray ", &
+               "when adjusting for out of bounds upper method: ", out_of_bounds_upper
+               error stop
+            end if
+         else
+            write(error_unit, *) "CS_read_file error: Method with enum ", out_of_bounds_upper, &
+               " for handling input data which does not go to high enough x-values (energy) was not implemented."
+            error stop
+         end if
+       end if
+
+       ! Adjust the tables at energies below the lowest value in the input data to ensure wanted behavior.
+       ! Cross sections will be taken as constant for energies below the ones found inside the tables.
+       if (tempArray(2, 1) > 0.0D0 .and. tempArray(1, 1) > 0.0D0) then
+         if (out_of_bounds_lower == CS_OutOfBounds_Constant) then
+            ! Do nothing
+         else if (out_of_bounds_lower == CS_OutOfBounds_Zero) then
+            ! Add an extra line at the beginning of the input data with a cross section of 0
+            ! and an energy slightly lower than the first value
+            if (n_rows < max_num_rows) then
+               n_rows = n_rows + 1
+               ! Shift all array elements (energy and cs) by 1 further in the array
+               tempArray = cshift(tempArray, shift=-1, dim=2)
+               tempArray(1, 1) = tempArray(1, 2) * (1 - epsilon(1.0_dp))
+               tempArray(2, 1) = 0
+            else
+               write(error_unit, *) "CS_read_file error: too many rows in tempArray ", &
+               "when adjusting for out of bounds lower method: ", out_of_bounds_lower
+               error stop
+            end if         
+         else
+            write(error_unit, *) "CS_read_file error: Method with enum ", out_of_bounds_lower, &
+            " for handling input data at lower x-values (energy) was not implemented."
+            error stop
+         end if
+       end if
+
        ! Store the data in the actual table
        allocate(cs_buf(cIx)%en_cs(2, n_rows))
        cs_buf(cIx)%n_rows     = n_rows
@@ -261,19 +362,6 @@ contains
              exit
           end if
        end do
-
-       ! Check whether the tables that have been read in go up to high enough
-       ! energies for our simulation. They can also have 0.0 as their highest
-       ! listed cross section, in which case we assume the cross section is 0.0
-       ! for all higher energies
-       if ( cs_buf(cIx)%en_cs(1, n_rows) < req_energy .and. &
-            & cs_buf(cIx)%en_cs(2, n_rows) > 0.0D0 ) then
-          write(error_unit, *) "CS_read_file error: cross section data at line ", &
-               nL, " does not go up to high enough x-values (energy)."
-          write(error_unit, *) "Required: ", req_energy, "found: ", &
-               cs_buf(cIx)%en_cs(1, n_rows)
-          error stop
-       end if
 
     end do
 
