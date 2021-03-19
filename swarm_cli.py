@@ -189,6 +189,9 @@ if __name__ == '__main__':
 
     try:
         tmpdir = tempfile.mkdtemp(dir=os.getcwd())
+        swarm_cli_path = os.path.abspath(os.path.realpath(__file__))
+        particle_swarm_exec_path = os.path.join(os.path.dirname(swarm_cli_path), "particle_swarm")
+
         base_cfg = create_swarm_cfg(tmpdir, args)
         cmd_list = []
         swarm_data = []
@@ -203,7 +206,7 @@ if __name__ == '__main__':
                     progress_bar(100. * i / n_runs)
                     i += 1
                     var_cfg = create_var_cfg(tmpdir, i, names, [E, angle, B])
-                    res = check_output(['./particle_swarm', base_cfg, var_cfg])
+                    res = check_output([particle_swarm_exec_path, base_cfg, var_cfg])
                     swarm_data.append(res)
     finally:
         progress_bar(100.)
