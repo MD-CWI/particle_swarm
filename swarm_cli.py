@@ -128,29 +128,70 @@ def read_cfg_to_dict(cfg_filename):
     return cfg_dict
 
 def create_swarm_cfg(tmpdir, args):
+    fname = tmpdir + '/base_cfg.txt'
+
     if len(args.base_cfg) > 0:
-        return args.base_cfg
+        cfg_dict = read_cfg_to_dict(args.base_cfg)
+
+        # Write to a temporary cfg file any config variable NOT in the passed base cfg
+        # Note: Since gas components and gas fractions are mandatory in the cli
+        # the ones written in the passed base cfg will NOT be used. The ones
+        # from the cli will be used and will be written to a temporary cfg file
+        with open(fname, "w") as f:
+            f.write(f"output_dir = {tmpdir}\n")
+            f.write(f"gas_file = {args.cs}\n")
+
+            if "swarm_name" not in cfg_dict:
+                f.write("swarm_name = swarm_cli\n")
+            
+            f.write(f"gas_components = {' '.join(args.gas_comps[0::2])}\n")
+            f.write(f"gas_fractions = {' '.join(args.gas_comps[1::2])}\n")
+
+            if "gas_pressure" not in cfg_dict:
+                f.write(f"gas_pressure = {args.p}\n")
+            if "gas_temperature" not in cfg_dict:
+                f.write(f"gas_temperature = {args.T}\n")
+            if "acc_velocity_sq" not in cfg_dict:
+                f.write(f"acc_velocity_sq = {' '.join(map(str, args.acc_v2))}\n")
+            if "acc_velocity" not in cfg_dict:
+                f.write(f"acc_velocity = {' '.join(map(str, args.acc_v))}\n")
+            if "acc_diffusion" not in cfg_dict:
+                f.write(f"acc_diffusion = {' '.join(map(str, args.acc_D))}\n")
+            if "acc_alpha" not in cfg_dict:
+                f.write(f"acc_alpha = {' '.join(map(str, args.acc_a))}\n")
+            if "electric_field" not in cfg_dict:
+                f.write(f"electric_field = {args.E_range[0]}\n")
+            if "magnetic_field" not in cfg_dict:
+                f.write(f"magnetic_field = {args.B_range[0]}\n")
+            if "field_angle_degrees" not in cfg_dict:
+                f.write(f"field_angle_degrees = {args.angle_range[0]}\n")
+            if "particle_max_energy_ev" not in cfg_dict:
+                f.write(f"particle_max_energy_ev = {args.eV_max}\n")
+            if "max_cpu_time" not in cfg_dict:
+                f.write(f"max_cpu_time = {args.max_cpu_time}\n")
+            if "particle_mover" not in cfg_dict:
+                f.write(f"particle_mover = {args.mover}\n")
+
+        return [args.base_cfg, fname]
     else:
-        fname = tmpdir + '/base_cfg.txt'
-        f = open(fname, 'w')
-        f.write('output_dir = ' + tmpdir + '\n')
-        f.write('gas_file = ' + args.cs + '\n')
-        f.write('swarm_name = swarm_cli\n')
-        f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
-        f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
-        f.write('gas_pressure = ' + str(args.p) + '\n')
-        f.write('gas_temperature = ' + str(args.T) + '\n')
-        f.write('acc_velocity_sq = ' + ' '.join(map(str, args.acc_v2)) + '\n')
-        f.write('acc_velocity = ' + ' '.join(map(str, args.acc_v)) + '\n')
-        f.write('acc_diffusion = ' + ' '.join(map(str, args.acc_D)) + '\n')
-        f.write('acc_alpha = ' + ' '.join(map(str, args.acc_a)) + '\n')
-        f.write('electric_field = ' + str(args.E_range[0]) + '\n')
-        f.write('magnetic_field = ' + str(args.B_range[0]) + '\n')
-        f.write('field_angle_degrees = ' + str(args.angle_range[0]) + '\n')
-        f.write('particle_max_energy_ev = ' + str(args.eV_max) + '\n')
-        f.write('max_cpu_time = ' + str(args.max_cpu_time) + '\n')
-        f.write('particle_mover = ' + args.mover + '\n')
-        f.close()
+        with open(fname, "w") as f:
+            f.write('output_dir = ' + tmpdir + '\n')
+            f.write('gas_file = ' + args.cs + '\n')
+            f.write('swarm_name = swarm_cli\n')
+            f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
+            f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
+            f.write('gas_pressure = ' + str(args.p) + '\n')
+            f.write('gas_temperature = ' + str(args.T) + '\n')
+            f.write('acc_velocity_sq = ' + ' '.join(map(str, args.acc_v2)) + '\n')
+            f.write('acc_velocity = ' + ' '.join(map(str, args.acc_v)) + '\n')
+            f.write('acc_diffusion = ' + ' '.join(map(str, args.acc_D)) + '\n')
+            f.write('acc_alpha = ' + ' '.join(map(str, args.acc_a)) + '\n')
+            f.write('electric_field = ' + str(args.E_range[0]) + '\n')
+            f.write('magnetic_field = ' + str(args.B_range[0]) + '\n')
+            f.write('field_angle_degrees = ' + str(args.angle_range[0]) + '\n')
+            f.write('particle_max_energy_ev = ' + str(args.eV_max) + '\n')
+            f.write('max_cpu_time = ' + str(args.max_cpu_time) + '\n')
+            f.write('particle_mover = ' + args.mover + '\n')
         return fname
 
 
@@ -171,6 +212,15 @@ def progress_bar(pct):
 
 
 def print_swarm_info(args, E_list, B_list, angle_list):
+    if args.base_cfg is not None:
+        cfg_dict = read_cfg_to_dict(args.base_cfg)
+        if "gas_temperature" in cfg_dict:
+            args.T = cfg_dict["gas_temperature"]
+        if "gas_pressure" in cfg_dict:
+            args.p = cfg_dict["gas_pressure"]
+        if "particle_mover" in cfg_dict:
+            args.mover = cfg_dict["particle_mover"]
+
     print("Starting particle swarm simulation")
     print("----------------------------------------")
     print("Cross section file : {}".format(args.cs))
@@ -192,7 +242,7 @@ def print_swarm_info(args, E_list, B_list, angle_list):
 # Convert EN in Td to E in V / m
 def EN_to_E(EN, pressure_bar):
     Td = 1e-21  # V m2
-    n0 = 2.6867811e25  # m-3
+    n0 = 2.414321e25  # m-3
 
     return EN * Td * (n0 * pressure_bar)
 
@@ -270,7 +320,10 @@ if __name__ == '__main__':
                     progress_bar(100. * i / n_runs)
                     i += 1
                     var_cfg = create_var_cfg(tmpdir, i, names, [E, angle, B])
-                    res = check_output([particle_swarm_exec_path, base_cfg, var_cfg])
+                    if type(base_cfg) == list:
+                        res = check_output([particle_swarm_exec_path, *base_cfg, var_cfg])
+                    else:
+                        res = check_output([particle_swarm_exec_path, base_cfg, var_cfg])
                     swarm_data.append(res)
     finally:
         progress_bar(100.)
