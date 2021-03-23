@@ -51,10 +51,22 @@ def get_args():
                         help='Electric field value (V/m)')
     g.add_argument('-E_range', nargs=2, type=float, default=[1e7, 1e7],
                         help='min/max electric field (V/m)')
-    parser.add_argument('-E_vary', type=str, choices=['lin', 'log'],
+    g.add_argument('-EN', type=float,
+                        help='Reduced electric field value (Td)')
+    g.add_argument('-EN_range', nargs=2, type=float, default=[370, 370],
+                        help='min/max reduced electric field (Td)')
+
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument('-E_vary', type=str, choices=['lin', 'log'],
                         default='lin', help='How to vary electric field')
-    parser.add_argument('-E_num', type=int, default=1,
+    g.add_argument('-EN_vary', type=str, choices=['lin', 'log'],
+                        default='lin', help='How to vary reduced electric field')
+
+    g = parser.add_mutually_exclusive_group()
+    g.add_argument('-E_num', type=int, default=1,
                         help='Number of electric fields')
+    g.add_argument('-EN_num', type=int, default=1,
+                        help='Number of reduced electric fields')
 
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-angle', type=float,
@@ -96,6 +108,24 @@ def get_args():
     
     return parser.parse_args()
 
+
+def read_cfg_to_dict(cfg_filename):
+    cfg_dict = {}
+    with open(cfg_filename) as f:
+        for line in f.readlines():
+            sanitized_string = line.lstrip()
+            if len(sanitized_string) > 0:
+                if sanitized_string[0] != "#":
+                    split_line = sanitized_string.split("=")
+                    key = split_line[0].strip()
+
+                    val = split_line[1].strip()
+                    if len(val.split()) > 1:
+                        val = [x for x in val.split()]
+
+                    cfg_dict[key] = val
+
+    return cfg_dict
 
 def create_swarm_cfg(tmpdir, args):
     if len(args.base_cfg) > 0:
@@ -159,37 +189,65 @@ def print_swarm_info(args, E_list, B_list, angle_list):
     print("Angles (degrees)      : {}".format(' '.join(Avals)))
     print("----------------------------------------")
 
+# Convert EN in Td to E in V / m
+def EN_to_E(EN, pressure_bar):
+    Td = 1e-21  # V m2
+    n0 = 2.6867811e25  # m-3
+
+    return EN * Td * (n0 * pressure_bar)
 
 if __name__ == '__main__':
     args = get_args()
 
-    # Set ranges if a scalar argument was given
+    pressure_bar = args.p
+    if args.base_cfg is not None:
+        cfg_dict = read_cfg_to_dict(args.base_cfg)
+        pressure_bar = float(cfg_dict["gas_pressure"])
+
+    # Set E_list
     if args.E is not None:
-        args.E_range = [args.E, args.E]
-        args.E_num = 1
+        E_list = np.array([args.E])
+    elif args.E_num > 1:
+        if args.E_vary == 'lin':
+            E_list = np.linspace(args.E_range[0], args.E_range[1], args.E_num)
+        elif args.E_vary == 'log':
+            E_list = np.logspace(math.log10(args.E_range[0]),
+                                math.log10(args.E_range[1]), args.E_num)
+    elif args.EN is not None:
+        E_list = np.array([EN_to_E(args.EN, pressure_bar)])
+    elif args.EN_num > 1:
+        if args.EN_vary == 'lin':
+            E_list = np.linspace(EN_to_E(args.EN_range[0], pressure_bar), EN_to_E(args.EN_range[1], pressure_bar), args.EN_num)
+        elif args.EN_vary == 'log':
+            E_list = np.logspace(math.log10(EN_to_E(args.EN_range[0], pressure_bar)),
+                                math.log10(EN_to_E(args.EN_range[1], pressure_bar)), args.EN_num)
+    else:
+        # When nothing has been passed for electric field
+        E_list = np.array([args.E_range[0]])
+    
+    # Set B_list
     if args.B is not None:
-        args.B_range = [args.B, args.B]
-        args.B_num = 1
+        B_list = np.array([args.B])
+    elif args.B_num > 1:
+        if args.B_vary == 'lin':
+            B_list = np.linspace(args.B_range[0], args.B_range[1], args.B_num)
+        elif args.B_vary == 'log':
+            B_list = np.logspace(math.log10(args.B_range[0]),
+                                math.log10(args.B_range[1]), args.B_num)
+    else:
+        # When nothing has been passed for B field
+        B_list = np.array([args.B_range[0]])
+
+    # Set angle_list
     if args.angle is not None:
-        args.angle_range = [args.angle, args.angle]
-        args.angle_num = 1
+        angle_list = np.array([args.angle])
+    elif args.angle_num > 1:
+        angle_list = np.linspace(args.angle_range[0], args.angle_range[1],
+                                 args.angle_num)
+    else:
+        # When nothing has been passed for angles
+        angle_list = np.array([args.angle_range[0]])
 
-    # Generate lists of E, angle and B values
-    n_runs = args.E_num * args.angle_num * args.B_num
-    if args.E_vary == 'lin':
-        E_list = np.linspace(args.E_range[0], args.E_range[1], args.E_num)
-    elif args.E_vary == 'log':
-        E_list = np.logspace(math.log10(args.E_range[0]),
-                             math.log10(args.E_range[1]), args.E_num)
-
-    angle_list = np.linspace(args.angle_range[0], args.angle_range[1],
-                             args.angle_num)
-
-    if args.B_vary == 'lin':
-        B_list = np.linspace(args.B_range[0], args.B_range[1], args.B_num)
-    elif args.B_vary == 'log':
-        B_list = np.logspace(math.log10(args.B_range[0]),
-                             math.log10(args.B_range[1]), args.B_num)
 
     print_swarm_info(args, E_list, B_list, angle_list)
 
