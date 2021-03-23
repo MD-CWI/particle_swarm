@@ -91,31 +91,37 @@ def get_args():
     parser.add_argument('-acc_a', type=float, nargs=2, default=(5e-3, 10.0),
                         metavar=('rel', 'abs'),
                         help='Required rel./abs. error in alpha')
+
+    parser.add_argument('-base_cfg', type=str, help='Optional configuration file which fixes variables across runs (e.g. when using E_range).')
+    
     return parser.parse_args()
 
 
 def create_swarm_cfg(tmpdir, args):
-    fname = tmpdir + '/base_cfg.txt'
-    f = open(fname, 'w')
-    f.write('output_dir = ' + tmpdir + '\n')
-    f.write('gas_file = ' + args.cs + '\n')
-    f.write('swarm_name = swarm_cli\n')
-    f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
-    f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
-    f.write('gas_pressure = ' + str(args.p) + '\n')
-    f.write('gas_temperature = ' + str(args.T) + '\n')
-    f.write('acc_velocity_sq = ' + ' '.join(map(str, args.acc_v2)) + '\n')
-    f.write('acc_velocity = ' + ' '.join(map(str, args.acc_v)) + '\n')
-    f.write('acc_diffusion = ' + ' '.join(map(str, args.acc_D)) + '\n')
-    f.write('acc_alpha = ' + ' '.join(map(str, args.acc_a)) + '\n')
-    f.write('electric_field = ' + str(args.E_range[0]) + '\n')
-    f.write('magnetic_field = ' + str(args.B_range[0]) + '\n')
-    f.write('field_angle_degrees = ' + str(args.angle_range[0]) + '\n')
-    f.write('particle_max_energy_ev = ' + str(args.eV_max) + '\n')
-    f.write('max_cpu_time = ' + str(args.max_cpu_time) + '\n')
-    f.write('particle_mover = ' + args.mover + '\n')
-    f.close()
-    return fname
+    if len(args.base_cfg) > 0:
+        return args.base_cfg
+    else:
+        fname = tmpdir + '/base_cfg.txt'
+        f = open(fname, 'w')
+        f.write('output_dir = ' + tmpdir + '\n')
+        f.write('gas_file = ' + args.cs + '\n')
+        f.write('swarm_name = swarm_cli\n')
+        f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
+        f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
+        f.write('gas_pressure = ' + str(args.p) + '\n')
+        f.write('gas_temperature = ' + str(args.T) + '\n')
+        f.write('acc_velocity_sq = ' + ' '.join(map(str, args.acc_v2)) + '\n')
+        f.write('acc_velocity = ' + ' '.join(map(str, args.acc_v)) + '\n')
+        f.write('acc_diffusion = ' + ' '.join(map(str, args.acc_D)) + '\n')
+        f.write('acc_alpha = ' + ' '.join(map(str, args.acc_a)) + '\n')
+        f.write('electric_field = ' + str(args.E_range[0]) + '\n')
+        f.write('magnetic_field = ' + str(args.B_range[0]) + '\n')
+        f.write('field_angle_degrees = ' + str(args.angle_range[0]) + '\n')
+        f.write('particle_max_energy_ev = ' + str(args.eV_max) + '\n')
+        f.write('max_cpu_time = ' + str(args.max_cpu_time) + '\n')
+        f.write('particle_mover = ' + args.mover + '\n')
+        f.close()
+        return fname
 
 
 def create_var_cfg(tmpdir, index, varnames, values):
