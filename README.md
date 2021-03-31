@@ -47,7 +47,7 @@ To see command the line options and their documentation, use:
 
 An example of an invocation:
 
-    ./swarm_cli.py input/cs_example.txt -of test.txt -gc N2 1.0 -E_range 1e7 2e7 -E_num 10
+    ./swarm_cli.py input/cs_example.txt -o test.txt -gc N2 1.0 -E_range 1e7 2e7 -E_num 10
 
 The last command uses cross sections from the file `input/cs_example.txt`,
 stores results in `test.txt` and performs swarm simulations in pure nitrogen

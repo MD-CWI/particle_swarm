@@ -48,6 +48,7 @@ contains
     character(len=20), allocatable :: gas_names(:)
     real(dp), allocatable          :: gas_fracs(:)
     type(CS_t), allocatable        :: cross_secs(:)
+    integer                        :: out_of_bounds_lower, out_of_bounds_upper
 
     ! Create default parameters for the simulation (routine contained below)
     call create_sim_config(cfg)
@@ -88,11 +89,15 @@ contains
 
     call CFG_get(cfg, "gas_file", cs_file)
     call CFG_get(cfg, "particle_max_energy_ev", max_ev)
+    call CFG_get(cfg, "cs_outofbounds_lower", out_of_bounds_lower)
+    call CFG_get(cfg, "cs_outofbounds_upper", out_of_bounds_upper)
 
     do nn = 1, n_gas_comp
        call CS_add_from_file(trim(cs_file), &
             trim(gas_names(nn)), gas_fracs(nn) * &
-            GAS_number_dens, max_ev, cross_secs)
+            GAS_number_dens, max_ev, cross_secs, &
+            opt_out_of_bounds_lower=out_of_bounds_lower, &
+            opt_out_of_bounds_upper=out_of_bounds_upper)
     end do
 
     call CS_write_summary(cross_secs, &
@@ -161,6 +166,8 @@ contains
 
   !> Create the parameters and their default values for the simulation
   subroutine create_sim_config(cfg)
+     use m_cross_sec
+
     type(CFG_t), intent(inout) :: cfg
 
     call CFG_add(cfg, "verbose", 0, &
@@ -222,6 +229,14 @@ contains
          "The file in which to find cross section data")
     call CFG_add(cfg, "gas_fractions", (/1.0_dp /), &
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
+    
+    call CFG_add(cfg, "cs_outofbounds_lower", CS_OutOfBounds_Constant, &
+         "What to do when trying to retrieve cross sections at energies lower than the input data contains. &
+        & 1 = Take the lowest point in the input data. 2 = Assume zero.")
+    call CFG_add(cfg, "cs_outofbounds_upper", CS_OutOfBounds_Throw, &
+          "What to do when trying to retrieve cross sections at energies higher than the input data contains. &
+         & 0 = Throw an error. Program will quit. 2 = Assume zero. 3 = Extrapolate linearly to required energy.")
+    
 
     ! Particle model related parameters
     call CFG_add(cfg, "particle_rng_seed", [0, 0, 0, 0], &
