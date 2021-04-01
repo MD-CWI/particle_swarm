@@ -130,11 +130,11 @@ def read_cfg_to_dict(cfg_filename):
 def create_swarm_cfg(tmpdir, args):
     fname = tmpdir + '/base_cfg.txt'
 
-    if len(args.base_cfg) > 0:
+    if args.base_cfg is not None:
         cfg_dict = read_cfg_to_dict(args.base_cfg)
 
         # Write to a temporary cfg file any config variable NOT in the passed base cfg
-        # Note: Since gas components and gas fractions are mandatory in the cli
+        # Note: Since gas components, gas fractions, and gas file are mandatory in the cli
         # the ones written in the passed base cfg will NOT be used. The ones
         # from the cli will be used and will be written to a temporary cfg file
         with open(fname, "w") as f:
