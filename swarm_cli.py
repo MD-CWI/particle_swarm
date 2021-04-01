@@ -333,15 +333,18 @@ if __name__ == '__main__':
     # Find transport data names
     td_names = []
     for line in swarm_data[0].splitlines():
-        name = line.decode('ascii')[:40].strip()
-        td_names.append(name)
+        if "warning" not in line.decode("ascii"):
+            name = line.decode('ascii')[:40].strip()
+            td_names.append(name)
 
     n_cols = len(td_names)
     data = np.zeros((n_runs, n_cols))
     sigma = np.zeros((n_runs, n_cols))
 
     for i, res in enumerate(swarm_data):
-        for j, line in enumerate(res.splitlines()):
+        split_result = res.splitlines()
+        split_result = [result for result in split_result if "warning" not in result.decode("ascii")]
+        for j, line in enumerate(split_result):
             values = line[40:].split()
             data[i, j] = values[0]
             sigma[i, j] = values[1]
