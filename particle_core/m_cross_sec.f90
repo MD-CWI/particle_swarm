@@ -92,6 +92,7 @@ contains
     real(dp)                :: x_scaling, y_scaling, tmp_value
     real(dp)                :: two_reals(2)
     integer                 :: out_of_bounds_lower, out_of_bounds_upper
+    logical                 :: has_elastic = .false., has_effective = .false.
 
     ! Default behaviour for when the input data does not go up to the upper bound energy (req_energy)
     if (.not. present(opt_out_of_bounds_upper)) then
@@ -156,11 +157,10 @@ contains
           col_type = CS_attach_t
        case ("ELASTIC", "MOMENTUM")
           col_type = CS_elastic_t
+          has_elastic = .true.
        case ("EFFECTIVE")
-          col_type = CS_elastic_t
-          print *, "CS_read_file: using EFFECTIVE elastic cross section for ", &
-               trim(gas_name), ", this should not be used in particle simulations."
-          error stop "Wrong type of cross sections"
+          has_effective = .true. 
+          cycle
        case ("EXCITATION")
           col_type = CS_excite_t
        case ("IONIZATION")
@@ -364,6 +364,12 @@ contains
        end do
 
     end do
+
+    if (has_effective .and. (.not. has_elastic)) then
+      print *, "CS_read_file: using EFFECTIVE elastic cross section for ", &
+               trim(gas_name), ", this should not be used in particle simulations."
+      error stop "Wrong type of cross sections"
+    end if
 
 555 continue ! Routine ends here if the end of "filename" is reached erroneously
     close(my_unit, ERR = 999, IOSTAT = io_state)
