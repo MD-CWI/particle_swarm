@@ -338,9 +338,9 @@ contains
 
     write(my_unit, ERR = 999, FMT = "(A)") "# List of collision processes"
     write(my_unit, ERR = 999, FMT = "(A)") &
-         "Index      Gasname            Coltype     Description"
+         "Index      Gasname            Coltype     Description           Activation Energy (J)"
     write(my_unit, ERR = 999, FMT = "(A)") &
-         "-----------------------------------------------------"
+         "---------------------------------------------------------------------------------------"
 
     do n = 1, size(cross_secs)
        select case (cross_secs(n)%coll%type)
@@ -354,9 +354,9 @@ contains
           col_name = "Ionization"
        end select
 
-       write(my_unit, ERR = 999, FMT = "((I4),(A),(A12),(A),(A15),(A),(A25))") &
+       write(my_unit, ERR = 999, FMT = "((I4),(A),(A12),(A),(A15),(A),(A30),(A),(E13.6))") &
             n, "    ", trim(cross_secs(n)%gas_name), "  ", trim(col_name), &
-            "     ", cross_secs(n)%description
+            "     ", cross_secs(n)%description, " ", cross_secs(n)%coll%en_loss
     end do
 
     close(my_unit, STATUS = "KEEP", ERR = 999, IOSTAT = io_state)
