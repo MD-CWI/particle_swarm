@@ -466,12 +466,16 @@ contains
        select case (cross_secs(n)%coll%type)
        case (CS_elastic_t)
           col_name = "Elastic"
+       case (CS_effective_t)
+          col_name = "Effective"
        case (CS_excite_t)
           col_name = "Excitation"
        case (CS_attach_t)
           col_name = "Attachment"
        case (CS_ionize_t)
           col_name = "Ionization"
+       case default
+          error stop "Unknown collision type"
        end select
 
        write(my_unit, ERR = 999, FMT = "((I4),(A),(A12),(A),(A15),(A),(A25))") &
