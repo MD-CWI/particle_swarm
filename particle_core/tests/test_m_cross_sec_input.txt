@@ -63,7 +63,7 @@ Ar
 From compilation of A.V. Phelps.
 -----------------------------------------------------------------------------------------------------------------------
 
-MOMENTUM
+EFFECTIVE
 Ar
   1.360e-5 / mass ratio
 COMMENT: EFFECTIVE MOMENTUM-TRANSFER CROSS SECTION
@@ -1000,7 +1000,7 @@ O2
 From compilation of A. V. Phelps.
 -----------------------------------------------------------------------------------------------------------------------
 
-MOMENTUM
+EFFECTIVE
 O2
   1.700e-5 / mass ratio
 UPDATED: 2009-09-19 15:56:39

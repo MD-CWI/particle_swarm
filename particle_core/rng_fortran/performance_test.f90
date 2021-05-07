@@ -78,4 +78,18 @@ program test_m_random
    print *, "mean/<mean>", mean/pi ! Above we add one to RNG_normal()
    print *, "std dev/<std dev>", sqrt(variance/pi)
 
+   call cpu_time(time_start)
+   do nn = 1, n_samples
+      rand_results(nn) = rng%exponential(1.0_dp)
+   end do
+   call cpu_time(time_end)
+   mean = sum(rand_results) / n_samples
+   variance = sum((rand_results - mean)**2) / n_samples
+
+   print *, ""
+   print *, "For exponential random numbers, the result is:"
+   print *, "nanoseconds per number (upper bound)", 1.0e9_dp * (time_end - time_start) / n_samples
+   print *, "mean/<mean>", mean
+   print *, "std dev/<std dev>", sqrt(variance)
+
 end program test_m_random
