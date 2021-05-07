@@ -230,10 +230,10 @@ contains
     call CFG_add(cfg, "gas_fractions", (/1.0_dp /), &
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
     
-    call CFG_add(cfg, "cs_outofbounds_lower", CS_OutOfBounds_Constant, &
+    call CFG_add(cfg, "cs_outofbounds_lower", CS_extrapolate_constant, &
          "What to do when trying to retrieve cross sections at energies lower than the input data contains. &
         & 1 = Take the lowest point in the input data. 2 = Assume zero.")
-    call CFG_add(cfg, "cs_outofbounds_upper", CS_OutOfBounds_Throw, &
+    call CFG_add(cfg, "cs_outofbounds_upper", CS_extrapolate_error, &
           "What to do when trying to retrieve cross sections at energies higher than the input data contains. &
          & 0 = Throw an error. Program will quit. 2 = Assume zero. 3 = Extrapolate linearly to required energy.")
     
