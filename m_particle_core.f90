@@ -115,10 +115,12 @@ module m_particle_core
      real(dp)                     :: max_rate
      !> Inverse of maximum collision rate
      real(dp)                     :: inv_max_rate
-     !> Background gas temperature
+     !> Background gas temperature [K]
      real(dp)                     :: gas_temperature = 0.0_dp
      !> Consider gas temperature effects below this particle velocity
      real(dp)                     :: gas_temperature_vmin = 0.0_dp
+     !> Gas mean molecular mass [K], used to sample gas velocities
+     real(dp)                     :: gas_mean_molecular_mass
 
      !> List of particles to be removed
      type(LL_int_head_t)          :: clean_list
@@ -634,7 +636,7 @@ contains
     type(PC_buf_t), intent(inout) :: buffer
 
     integer            :: i, cIx, cType, n_coll_out
-    real(dp)           :: coll_time, new_vel
+    real(dp)           :: coll_time, rel_speed
     real(dp)           :: gas_vel(3)
     type(PC_part_t)    :: coll_out(PC_coll_max_part_out)
 
@@ -661,17 +663,21 @@ contains
          if (part%w <= PC_dead_weight) return
 
          gas_vel = 0.0_dp
-         new_vel = norm2(part%v)
+         rel_speed = norm2(part%v)
 
          ! Handle gas temperature effects
-         if (new_vel < self%gas_temperature_vmin) then
+         if (rel_speed < self%gas_temperature_vmin) then
+            ! We need to determine a gas velocity first to determine whether
+            ! there will be a collision. To determine this velocity, we need the
+            ! mass of the gas molecule, but we do not yet know the type of
+            ! molecule. As an approximation, the mean molecular mass is used.
             gas_vel = sample_Maxwellian_velocity(self%gas_temperature, &
-                 28 * UC_atomic_mass, rng)
-            new_vel = norm2(part%v - gas_vel)
+                 self%gas_mean_molecular_mass, rng)
+            rel_speed = norm2(part%v - gas_vel)
          end if
 
          cIx = get_coll_index(self%ratesum_lt, self%n_colls, self%max_rate, &
-              new_vel, rng%unif_01())
+              rel_speed, rng%unif_01())
 
          if (cIx > 0) then
             ! Perform the corresponding collision
@@ -1304,10 +1310,12 @@ contains
 
   !> Set gas temperature and a threshold temperature, below which gas
   !> temperature effects are considered for particles
-  subroutine set_gas_temperature(self, temperature, temperature_threshold)
-    class(PC_t), intent(inout)    :: self
-    real(dp), intent(in)          :: temperature
-    real(dp), intent(in)          :: temperature_threshold
+  subroutine set_gas_temperature(self, temperature, temperature_threshold, &
+       mean_molecular_mass)
+    class(PC_t), intent(inout) :: self
+    real(dp), intent(in)       :: temperature           !< in [K]
+    real(dp), intent(in)       :: temperature_threshold !< in [K]
+    real(dp), intent(in)       :: mean_molecular_mass   !< in [kg]
 
     if (self%mass <= 0.0_dp) error stop "initialize first, mass == 0.0"
 
@@ -1316,6 +1324,10 @@ contains
     ! using the fact that 3/2 k T = 1/2 m v^2
     self%gas_temperature_vmin = sqrt(3 * UC_boltzmann_const * &
          temperature_threshold / self%mass)
+
+    ! The mean molecular mass is used to sample gas velocities
+    ! TODO: we can try to determine this automatically
+    self%gas_mean_molecular_mass = mean_molecular_mass
   end subroutine set_gas_temperature
 
   !> Sort the particles according to sort_func

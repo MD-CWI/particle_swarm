@@ -19,6 +19,7 @@ program test_thermalization
   real(dp), parameter     :: part_mass     = UC_elec_mass
   real(dp), parameter     :: init_accel(3) = (/0.0_dp, 0.0_dp, 0.0_dp/)
   real(dp)                :: pos(3), vel(3), accel(3), weight
+  real(dp)                :: mean_molecular_mass
   integer                 :: ll, step, num_colls
   type(CS_t), allocatable :: cross_secs(:)
   type(PC_t)              :: pc
@@ -29,7 +30,11 @@ program test_thermalization
        cross_secs)
   call pc%initialize(part_mass, max_num_part)
   call pc%use_cross_secs(max_en_eV, lkp_tbl_size, cross_secs)
-  call pc%set_gas_temperature(300.0_dp, 3000.0_dp)
+
+  ! Assumes first collision is the only elastic one
+  mean_molecular_mass = pc%cross_secs(1)%coll%part_mass / &
+       pc%cross_secs(1)%coll%rel_mass
+  call pc%set_gas_temperature(300.0_dp, 3000.0_dp, mean_molecular_mass)
 
   num_colls = pc%get_num_colls()
   deallocate(cross_secs)
@@ -37,8 +42,7 @@ program test_thermalization
   print *, "Creating initial particles"
   do ll = 1, init_num_part
      pos    = 0.0_dp
-     call random_number(vel)
-     vel    = (vel - 0.5_dp) * 1e5
+     vel    = 0.0_dp
      accel  = init_accel
      weight = 1
      call pc%create_part(pos, vel, accel, weight, 0.0_dp)
