@@ -29,8 +29,7 @@ program test_thermalization
        cross_secs)
   call pc%initialize(part_mass, max_num_part)
   call pc%use_cross_secs(max_en_eV, lkp_tbl_size, cross_secs)
-
-  pc%gas_temperature = 300.0_dp
+  call pc%set_gas_temperature(300.0_dp, 3000.0_dp)
 
   num_colls = pc%get_num_colls()
   deallocate(cross_secs)
