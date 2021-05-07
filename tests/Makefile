@@ -1,6 +1,7 @@
 FC 	:= gfortran
 FFLAGS	:= -Wall -g -O2 -fopenmp $(USR_FLAGS)
-TESTS	:= test_m_cross_sec test_openmp test_swarm ion_drift test_outside_check
+TESTS := test_m_cross_sec test_openmp test_swarm ion_drift test_outside_check	\
+test_thermalization
 
 # Need these libraries for the tests
 LIBS	:= particle_core

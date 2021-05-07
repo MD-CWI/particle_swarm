@@ -19,6 +19,7 @@ module m_particle_core
   use m_linked_list
   use m_random
   use m_cross_sec
+  use m_units_constants
 
   implicit none
   private
@@ -114,6 +115,8 @@ module m_particle_core
      real(dp)                     :: max_rate
      !> Inverse of maximum collision rate
      real(dp)                     :: inv_max_rate
+     !> Background gas temperature
+     real(dp)                     :: gas_temperature = 0.0_dp
 
      !> List of particles to be removed
      type(LL_int_head_t)          :: clean_list
@@ -292,7 +295,6 @@ contains
 
   !> Initialization routine for the particle module
   subroutine initialize(self, mass, n_part_max, rng_seed)
-    use m_units_constants
     class(PC_t), intent(inout)      :: self
     real(dp), intent(in)            :: mass
     integer, intent(in)             :: n_part_max
@@ -670,8 +672,8 @@ contains
             case (CS_attach_t)
                n_coll_out = 0
             case (CS_elastic_t)
-               call elastic_collision(part, coll_out, &
-                    n_coll_out, self%colls(cIx), rng)
+               call elastic_collision(part, coll_out, n_coll_out, &
+                    self%colls(cIx), self%gas_temperature, rng)
             case (CS_excite_t)
                call excite_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
@@ -769,21 +771,35 @@ contains
   end function get_max_coll_rate
 
   !> Perform an elastic collision for particle 'll'
-  subroutine elastic_collision(part_in, part_out, n_part_out, coll, rng)
+  subroutine elastic_collision(part_in, part_out, n_part_out, coll, &
+       gas_temperature, rng)
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
     type(CS_coll_t), intent(in)    :: coll
+    real(dp), intent(in)           :: gas_temperature
     type(RNG_t), intent(inout)     :: rng
-    real(dp)                       :: bg_vel(3), com_vel(3)
+    real(dp)                       :: gas_vel(3), com_vel(3)
+    real(dp)                       :: inv_gas_mass
 
-    ! TODO: implement random bg velocity
-    bg_vel      = 0.0_dp
+    if (gas_temperature > 0.0_dp) then
+       ! Sample from Maxwell-Boltzmann distribution
+       ! Each velocity component is has variance k*T/m
+       gas_vel(1:2) = rng%two_normals()
+       gas_vel(2:3) = rng%two_normals()
+       ! Get 1/mass of gas molecule
+       inv_gas_mass = coll%rel_mass / coll%part_mass
+       gas_vel = gas_vel * sqrt(UC_boltzmann_const * &
+            gas_temperature * inv_gas_mass)
+    else
+       gas_vel = 0.0_dp
+    end if
+
     n_part_out  = 1
     part_out(1) = part_in
 
     ! Compute center of mass velocity
-    com_vel = (coll%rel_mass * part_out(1)%v + bg_vel) / (1 + coll%rel_mass)
+    com_vel = (coll%rel_mass * part_out(1)%v + gas_vel) / (1 + coll%rel_mass)
 
     ! Scatter in center of mass coordinates
     part_out(1)%v = part_out(1)%v - com_vel
@@ -793,7 +809,6 @@ contains
 
   !> Perform an excitation-collision for particle 'll'
   subroutine excite_collision(part_in, part_out, n_part_out, coll, rng)
-    use m_units_constants
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
@@ -813,7 +828,6 @@ contains
 
   !> Perform an ionizing collision for particle 'll'
   subroutine ionization_collision(part_in, part_out, n_part_out, coll, rng)
-    use m_units_constants
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
@@ -868,7 +882,6 @@ contains
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant magnetic field using Boris method.
   subroutine PC_boris_advance(self, part, dt)
-    use m_units_constants
     class(PC_t), intent(in)        :: self
     type(PC_part_t), intent(inout) :: part
     real(dp), intent(in)           :: dt
@@ -934,7 +947,6 @@ contains
   !! But the velocity at t+1 should be v(t+1) = v(t) + 0.5*(a(t) + a(t+1))*dt
   !! to have a second order scheme, which is corrected here.
   subroutine PC_verlet_correct_accel(pc, dt)
-    use m_units_constants
     class(PC_t), intent(inout) :: pc
     real(dp), intent(in)      :: dt
     integer                   :: ll
@@ -1175,7 +1187,6 @@ contains
 
   !> Create a lookup table with cross collision rates from cross sections
   subroutine use_cross_secs(self, max_ev, table_size, cross_secs)
-    use m_units_constants
     use m_cross_sec
     use m_lookup_table
     class(PC_t), intent(inout) :: self
@@ -1232,7 +1243,6 @@ contains
 
   !> Create a lookup table with cross collision rates from a list of functions
   subroutine use_rate_funcs(self, max_ev, table_size, rate_funcs)
-    use m_units_constants
     use m_cross_sec
     use m_lookup_table
     class(PC_t), intent(inout)    :: self
