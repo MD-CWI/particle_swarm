@@ -48,25 +48,18 @@ def get_args():
 
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-E', type=float,
-                        help='Electric field value (V/m)')
+                   help='Electric field value')
     g.add_argument('-E_range', nargs=2, type=float, default=[1e7, 1e7],
-                        help='min/max electric field (V/m)')
-    g.add_argument('-EN', type=float,
-                        help='Reduced electric field value (Td)')
-    g.add_argument('-EN_range', nargs=2, type=float, default=[370, 370],
-                        help='min/max reduced electric field (Td)')
+                   help='min/max electric field')
 
-    g = parser.add_mutually_exclusive_group()
-    g.add_argument('-E_vary', type=str, choices=['lin', 'log'],
-                        default='lin', help='How to vary electric field')
-    g.add_argument('-EN_vary', type=str, choices=['lin', 'log'],
-                        default='lin', help='How to vary reduced electric field')
-
-    g = parser.add_mutually_exclusive_group()
-    g.add_argument('-E_num', type=int, default=1,
+    parser.add_argument('-E_unit', type=str, default='SI',
+                        choices=['SI', 'Td'],
+                        help='Electric field unit')
+    parser.add_argument('-E_vary', type=str, default='lin',
+                        choices=['lin', 'quad', 'log'],
+                        help='How to vary electric field')
+    parser.add_argument('-E_num', type=int, default=1,
                         help='Number of electric fields')
-    g.add_argument('-EN_num', type=int, default=1,
-                        help='Number of reduced electric fields')
 
     g = parser.add_mutually_exclusive_group()
     g.add_argument('-angle', type=float,
@@ -104,8 +97,9 @@ def get_args():
                         metavar=('rel', 'abs'),
                         help='Required rel./abs. error in alpha')
 
-    parser.add_argument('-base_cfg', type=str, help='Optional configuration file which fixes variables across runs (e.g. when using E_range).')
-    
+    parser.add_argument('-base_cfg', type=str,
+                        help='Optional configuration file which fixes variables across runs (e.g. when using E_range).')
+
     return parser.parse_args()
 
 
@@ -143,7 +137,7 @@ def create_swarm_cfg(tmpdir, args):
 
             if "swarm_name" not in cfg_dict:
                 f.write("swarm_name = swarm_cli\n")
-            
+
             f.write(f"gas_components = {' '.join(args.gas_comps[0::2])}\n")
             f.write(f"gas_fractions = {' '.join(args.gas_comps[1::2])}\n")
 
@@ -239,12 +233,14 @@ def print_swarm_info(args, E_list, B_list, angle_list):
     print("Angles (degrees)      : {}".format(' '.join(Avals)))
     print("----------------------------------------")
 
-# Convert EN in Td to E in V / m
-def EN_to_E(EN, pressure_bar):
-    Td = 1e-21  # V m2
-    n0 = 2.414321e25  # m-3
 
-    return EN * Td * (n0 * pressure_bar)
+# Convert E/N in [Td] to E in [V/m]
+def Townsend_to_SI(EN, args):
+    Td = 1e-21  # V m2
+    Boltzmann_constant = 1.380649e-23  # SI
+    gas_number_density = 1e5 * args.p / (Boltzmann_constant * args.T)
+    return EN * Td * gas_number_density
+
 
 if __name__ == '__main__':
     args = get_args()
@@ -260,21 +256,20 @@ if __name__ == '__main__':
     elif args.E_num > 1:
         if args.E_vary == 'lin':
             E_list = np.linspace(args.E_range[0], args.E_range[1], args.E_num)
+        elif args.E_vary == 'quad':
+            E_list = args.E_range[0] + np.linspace(0., 1., args.E_num)**2 * \
+                (args.E_range[1] - args.E_range[0])
         elif args.E_vary == 'log':
             E_list = np.logspace(math.log10(args.E_range[0]),
-                                math.log10(args.E_range[1]), args.E_num)
-    elif args.EN is not None:
-        E_list = np.array([EN_to_E(args.EN, pressure_bar)])
-    elif args.EN_num > 1:
-        if args.EN_vary == 'lin':
-            E_list = np.linspace(EN_to_E(args.EN_range[0], pressure_bar), EN_to_E(args.EN_range[1], pressure_bar), args.EN_num)
-        elif args.EN_vary == 'log':
-            E_list = np.logspace(math.log10(EN_to_E(args.EN_range[0], pressure_bar)),
-                                math.log10(EN_to_E(args.EN_range[1], pressure_bar)), args.EN_num)
+                                 math.log10(args.E_range[1]), args.E_num)
     else:
         # When nothing has been passed for electric field
         E_list = np.array([args.E_range[0]])
-    
+
+    if args.E_unit == 'Td':
+        # Convert Townsend to SI units
+        E_list = Townsend_to_SI(E_list, args)
+
     # Set B_list
     if args.B is not None:
         B_list = np.array([args.B])

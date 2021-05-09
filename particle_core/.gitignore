@@ -16,3 +16,4 @@ test_m_photoi
 /tests/ion_drift
 /tests/test_m_cross_sec_summary_output.txt
 /tests/test_outside_check
+/tests/test_thermalization

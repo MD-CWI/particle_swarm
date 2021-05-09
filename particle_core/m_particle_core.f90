@@ -19,6 +19,7 @@ module m_particle_core
   use m_linked_list
   use m_random
   use m_cross_sec
+  use m_units_constants
 
   implicit none
   private
@@ -114,12 +115,18 @@ module m_particle_core
      real(dp)                     :: max_rate
      !> Inverse of maximum collision rate
      real(dp)                     :: inv_max_rate
+     !> Background gas temperature [K]
+     real(dp)                     :: gas_temperature = 0.0_dp
+     !> Consider gas temperature effects below this particle velocity
+     real(dp)                     :: gas_temperature_vmin = 0.0_dp
+     !> Gas mean molecular mass [K], used to sample gas velocities
+     real(dp)                     :: gas_mean_molecular_mass
 
      !> List of particles to be removed
      type(LL_int_head_t)          :: clean_list
 
      !> Fixed mass for the particles
-     real(dp)                     :: mass
+     real(dp)                     :: mass = 0.0_dp
 
      !> State of random number generator
      type(RNG_t)                  :: rng
@@ -179,6 +186,7 @@ module m_particle_core
      procedure, non_overridable :: move_and_collide
      procedure, non_overridable :: use_cross_secs
      procedure, non_overridable :: use_rate_funcs
+     procedure, non_overridable :: set_gas_temperature
      procedure, non_overridable :: get_mean_energy
      procedure, non_overridable :: get_coll_rates
      procedure, non_overridable :: check_space
@@ -292,7 +300,6 @@ contains
 
   !> Initialization routine for the particle module
   subroutine initialize(self, mass, n_part_max, rng_seed)
-    use m_units_constants
     class(PC_t), intent(inout)      :: self
     real(dp), intent(in)            :: mass
     integer, intent(in)             :: n_part_max
@@ -629,7 +636,8 @@ contains
     type(PC_buf_t), intent(inout) :: buffer
 
     integer            :: i, cIx, cType, n_coll_out
-    real(dp)           :: coll_time, new_vel
+    real(dp)           :: coll_time, rel_speed
+    real(dp)           :: gas_vel(3)
     type(PC_part_t)    :: coll_out(PC_coll_max_part_out)
 
     associate(part => self%particles(ix))
@@ -654,13 +662,26 @@ contains
          call handle_particles_outside(self, part, ix, buffer)
          if (part%w <= PC_dead_weight) return
 
-         new_vel = norm2(part%v)
+         gas_vel = 0.0_dp
+         rel_speed = norm2(part%v)
+
+         ! Handle gas temperature effects
+         if (rel_speed < self%gas_temperature_vmin) then
+            ! We need to determine a gas velocity first to determine whether
+            ! there will be a collision. To determine this velocity, we need the
+            ! mass of the gas molecule, but we do not yet know the type of
+            ! molecule. As an approximation, the mean molecular mass is used.
+            gas_vel = sample_Maxwellian_velocity(self%gas_temperature, &
+                 self%gas_mean_molecular_mass, rng)
+            rel_speed = norm2(part%v - gas_vel)
+         end if
+
          cIx = get_coll_index(self%ratesum_lt, self%n_colls, self%max_rate, &
-              new_vel, rng%unif_01())
+              rel_speed, rng%unif_01())
 
          if (cIx > 0) then
             ! Perform the corresponding collision
-            cType    = self%colls(cIx)%type
+            cType = self%colls(cIx)%type
 
             if (self%coll_is_event(cIx)) then
                call add_event(buffer, part, cIx, cType)
@@ -670,8 +691,8 @@ contains
             case (CS_attach_t)
                n_coll_out = 0
             case (CS_elastic_t)
-               call elastic_collision(part, coll_out, &
-                    n_coll_out, self%colls(cIx), rng)
+               call elastic_collision(part, coll_out, n_coll_out, &
+                    self%colls(cIx), gas_vel, rng)
             case (CS_excite_t)
                call excite_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
@@ -768,22 +789,33 @@ contains
     get_max_coll_rate = self%max_rate
   end function get_max_coll_rate
 
+  !> Sample from Maxwell-Boltzmann distribution
+  function sample_Maxwellian_velocity(temperature, mass, rng) result(v)
+    real(dp), intent(in)       :: temperature, mass
+    type(RNG_t), intent(inout) :: rng
+    real(dp)                   :: v(3)
+
+    v(1:2) = rng%two_normals()
+    v(2:3) = rng%two_normals()
+    v = v * sqrt(UC_boltzmann_const * temperature /mass)
+  end function sample_Maxwellian_velocity
+
   !> Perform an elastic collision for particle 'll'
-  subroutine elastic_collision(part_in, part_out, n_part_out, coll, rng)
+  subroutine elastic_collision(part_in, part_out, n_part_out, coll, &
+       gas_vel, rng)
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
     type(CS_coll_t), intent(in)    :: coll
+    real(dp), intent(in)           :: gas_vel(3)
     type(RNG_t), intent(inout)     :: rng
-    real(dp)                       :: bg_vel(3), com_vel(3)
+    real(dp)                       :: com_vel(3)
 
-    ! TODO: implement random bg velocity
-    bg_vel      = 0.0_dp
     n_part_out  = 1
     part_out(1) = part_in
 
     ! Compute center of mass velocity
-    com_vel = (coll%rel_mass * part_out(1)%v + bg_vel) / (1 + coll%rel_mass)
+    com_vel = (coll%rel_mass * part_out(1)%v + gas_vel) / (1 + coll%rel_mass)
 
     ! Scatter in center of mass coordinates
     part_out(1)%v = part_out(1)%v - com_vel
@@ -793,7 +825,6 @@ contains
 
   !> Perform an excitation-collision for particle 'll'
   subroutine excite_collision(part_in, part_out, n_part_out, coll, rng)
-    use m_units_constants
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
@@ -813,7 +844,6 @@ contains
 
   !> Perform an ionizing collision for particle 'll'
   subroutine ionization_collision(part_in, part_out, n_part_out, coll, rng)
-    use m_units_constants
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
@@ -868,7 +898,6 @@ contains
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant magnetic field using Boris method.
   subroutine PC_boris_advance(self, part, dt)
-    use m_units_constants
     class(PC_t), intent(in)        :: self
     type(PC_part_t), intent(inout) :: part
     real(dp), intent(in)           :: dt
@@ -934,7 +963,6 @@ contains
   !! But the velocity at t+1 should be v(t+1) = v(t) + 0.5*(a(t) + a(t+1))*dt
   !! to have a second order scheme, which is corrected here.
   subroutine PC_verlet_correct_accel(pc, dt)
-    use m_units_constants
     class(PC_t), intent(inout) :: pc
     real(dp), intent(in)      :: dt
     integer                   :: ll
@@ -1175,7 +1203,6 @@ contains
 
   !> Create a lookup table with cross collision rates from cross sections
   subroutine use_cross_secs(self, max_ev, table_size, cross_secs)
-    use m_units_constants
     use m_cross_sec
     use m_lookup_table
     class(PC_t), intent(inout) :: self
@@ -1232,7 +1259,6 @@ contains
 
   !> Create a lookup table with cross collision rates from a list of functions
   subroutine use_rate_funcs(self, max_ev, table_size, rate_funcs)
-    use m_units_constants
     use m_cross_sec
     use m_lookup_table
     class(PC_t), intent(inout)    :: self
@@ -1281,6 +1307,28 @@ contains
     self%max_rate = maxval(sum_rate_list)
     self%inv_max_rate = 1 / self%max_rate
   end subroutine use_rate_funcs
+
+  !> Set gas temperature and a threshold temperature, below which gas
+  !> temperature effects are considered for particles
+  subroutine set_gas_temperature(self, temperature, temperature_threshold, &
+       mean_molecular_mass)
+    class(PC_t), intent(inout) :: self
+    real(dp), intent(in)       :: temperature           !< in [K]
+    real(dp), intent(in)       :: temperature_threshold !< in [K]
+    real(dp), intent(in)       :: mean_molecular_mass   !< in [kg]
+
+    if (self%mass <= 0.0_dp) error stop "initialize first, mass == 0.0"
+
+    self%gas_temperature = temperature
+    ! Compute velocity for particles corresponding to temperature_threshold,
+    ! using the fact that 3/2 k T = 1/2 m v^2
+    self%gas_temperature_vmin = sqrt(3 * UC_boltzmann_const * &
+         temperature_threshold / self%mass)
+
+    ! The mean molecular mass is used to sample gas velocities
+    ! TODO: we can try to determine this automatically
+    self%gas_mean_molecular_mass = mean_molecular_mass
+  end subroutine set_gas_temperature
 
   !> Sort the particles according to sort_func
   subroutine sort(self, sort_func)
