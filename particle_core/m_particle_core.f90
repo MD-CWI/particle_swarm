@@ -695,7 +695,7 @@ contains
                     self%colls(cIx), gas_vel, rng)
             case (CS_excite_t)
                call excite_collision(part, coll_out, &
-                    n_coll_out, self%colls(cIx), rng)
+                    n_coll_out, self%colls(cIx), gas_vel, rng)
             case (CS_ionize_t)
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
@@ -824,22 +824,30 @@ contains
   end subroutine elastic_collision
 
   !> Perform an excitation-collision for particle 'll'
-  subroutine excite_collision(part_in, part_out, n_part_out, coll, rng)
+  subroutine excite_collision(part_in, part_out, n_part_out, coll, gas_vel, rng)
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
     type(CS_coll_t), intent(in)    :: coll
+    real(dp), intent(in)           :: gas_vel(3)
     type(RNG_t), intent(inout)     :: rng
+    real(dp)                       :: molecular_mass, reduced_mass
+    real(dp)                       :: com_vel(3), old_rel_vel, new_rel_vel
+    
+    molecular_mass = (1 / coll%rel_mass) * coll%part_mass
+    reduced_mass = coll%part_mass * molecular_mass / (coll%part_mass + molecular_mass)
 
-    real(dp)             :: energy, old_en, new_vel
+    ! Compute center of mass velocity
+    com_vel = (coll%rel_mass * part_out(1)%v + gas_vel) / (1 + coll%rel_mass)
 
-    old_en  = PC_v_to_en(part_in%v, coll%part_mass)
-    energy  = max(0.0_dp, old_en - coll%en_loss)
-    new_vel = PC_en_to_vel(energy, coll%part_mass)
-
-    n_part_out  = 1
+    old_rel_vel = norm2(part_in%v - gas_vel)
+    new_rel_vel = sqrt(old_rel_vel**2 - (2.0_dp / reduced_mass) * coll%en_loss)
+    
+    n_part_out = 1
     part_out(1) = part_in
-    call scatter_isotropic(part_out(1), new_vel, rng)
+    call scatter_isotropic(part_out(1), new_rel_vel, rng)
+    part_out(1)%v = (molecular_mass / (coll%part_mass + molecular_mass)) * part_out(1)%v
+    part_out(1)%v = part_out(1)%v + com_vel
   end subroutine excite_collision
 
   !> Perform an ionizing collision for particle 'll'
