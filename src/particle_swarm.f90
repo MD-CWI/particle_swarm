@@ -41,7 +41,7 @@ contains
     integer                        :: nn, tbl_size, max_num_part
     integer                        :: swarm_size, n_gas_comp, n_gas_frac
     integer                        :: rng_seed(4), num_threads
-    real(dp)                       :: pressure, temperature, max_ev
+    real(dp)                       :: pressure, temperature, max_ev, mean_molecular_mass
     real(dp)                       :: magnetic_field, electric_field, tmp
     character(len=200)             :: cs_file, output_dir, tmp_name
     character(len=20)              :: particle_mover
@@ -119,6 +119,11 @@ contains
 
     call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
     call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
+
+    !print *, "ASSUMING CH4 AS MOLECULE. CHANGE MEAN MOLECULAR MASS FOR OTHER GAS."
+    ! Assumes first collision is the only elastic one
+    mean_molecular_mass = 12 * UC_atomic_mass + 4 * UC_atomic_mass
+    call pc%set_gas_temperature(temperature, 3000.0_dp, mean_molecular_mass)
 
     if (verbose > 0) then
        print *, "--------------------"
