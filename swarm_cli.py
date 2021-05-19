@@ -316,9 +316,15 @@ if __name__ == '__main__':
                     i += 1
                     var_cfg = create_var_cfg(tmpdir, i, names, [E, angle, B])
                     if type(base_cfg) == list:
-                        res = check_output([particle_swarm_exec_path, *base_cfg, var_cfg])
+                        try:
+                            res = check_output([particle_swarm_exec_path, *base_cfg, var_cfg])
+                        except subprocess.CalledProcessError as e:
+                            continue
                     else:
-                        res = check_output([particle_swarm_exec_path, base_cfg, var_cfg])
+                        try:
+                            res = check_output([particle_swarm_exec_path, base_cfg, var_cfg])
+                        except subprocess.CalledProcessError as e:
+                            continue
                     swarm_data.append(res)
     finally:
         progress_bar(100.)
