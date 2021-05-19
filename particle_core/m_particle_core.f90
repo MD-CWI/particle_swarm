@@ -841,7 +841,7 @@ contains
     com_vel = (coll%rel_mass * part_out(1)%v + gas_vel) / (1 + coll%rel_mass)
 
     old_rel_vel = norm2(part_in%v - gas_vel)
-    new_rel_vel = sqrt(old_rel_vel**2 - (2.0_dp / reduced_mass) * coll%en_loss)
+    new_rel_vel = max(0.0, sqrt(old_rel_vel**2 - (2.0_dp / reduced_mass) * coll%en_loss))
     
     n_part_out = 1
     part_out(1) = part_in
