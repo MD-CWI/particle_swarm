@@ -831,21 +831,22 @@ contains
     type(CS_coll_t), intent(in)    :: coll
     real(dp), intent(in)           :: gas_vel(3), gas_mean_molecular_mass
     type(RNG_t), intent(inout)     :: rng
-    real(dp)                       :: molecular_mass, reduced_mass
+    real(dp)                       :: reduced_mass
     real(dp)                       :: com_vel(3), old_rel_vel, new_rel_vel
     
     reduced_mass = coll%part_mass * gas_mean_molecular_mass / (coll%part_mass + gas_mean_molecular_mass)
     
     ! Compute center of mass velocity
-    com_vel = (coll%rel_mass * part_out(1)%v + gas_vel) / (1 + coll%rel_mass)
-
+    com_vel = (coll%part_mass * part_in%v + gas_mean_molecular_mass * gas_vel) / &
+              (coll%part_mass + gas_mean_molecular_mass)
+   
     old_rel_vel = norm2(part_in%v - gas_vel)
     new_rel_vel = max(0.0, sqrt(old_rel_vel**2 - (2.0_dp / reduced_mass) * coll%en_loss))
     
     n_part_out = 1
     part_out(1) = part_in
     call scatter_isotropic(part_out(1), new_rel_vel, rng)
-    part_out(1)%v = (molecular_mass / (coll%part_mass + molecular_mass)) * part_out(1)%v
+    part_out(1)%v = (gas_mean_molecular_mass / (coll%part_mass + gas_mean_molecular_mass)) * part_out(1)%v
     part_out(1)%v = part_out(1)%v + com_vel
   end subroutine excite_collision
 
