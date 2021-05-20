@@ -695,7 +695,7 @@ contains
                     self%colls(cIx), gas_vel, rng)
             case (CS_excite_t)
                call excite_collision(part, coll_out, &
-                    n_coll_out, self%colls(cIx), gas_vel, rng)
+                    n_coll_out, self%colls(cIx), gas_vel, self%gas_mean_molecular_mass, rng)
             case (CS_ionize_t)
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
@@ -824,21 +824,21 @@ contains
   end subroutine elastic_collision
 
   !> Perform an excitation-collision for particle 'll'
-  subroutine excite_collision(part_in, part_out, n_part_out, coll, gas_vel, rng)
+  subroutine excite_collision(part_in, part_out, n_part_out, coll, gas_vel, molecular_mass, rng)
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
     type(CS_coll_t), intent(in)    :: coll
-    real(dp), intent(in)           :: gas_vel(3)
+    real(dp), intent(in)           :: gas_vel(3), molecular_mass
     type(RNG_t), intent(inout)     :: rng
-    real(dp)                       :: molecular_mass, reduced_mass
+    real(dp)                       :: reduced_mass
     real(dp)                       :: com_vel(3), old_rel_vel, new_rel_vel
     
-    molecular_mass = (1 / coll%rel_mass) * coll%part_mass
     reduced_mass = coll%part_mass * molecular_mass / (coll%part_mass + molecular_mass)
 
     ! Compute center of mass velocity
-    com_vel = (coll%rel_mass * part_out(1)%v + gas_vel) / (1 + coll%rel_mass)
+    com_vel = (coll%part_mass * part_in%v + molecular_mass * gas_vel) / &
+              (coll%part_mass + molecular_mass)
 
     old_rel_vel = norm2(part_in%v - gas_vel)
     new_rel_vel = max(0.0, sqrt(old_rel_vel**2 - (2.0_dp / reduced_mass) * coll%en_loss))
