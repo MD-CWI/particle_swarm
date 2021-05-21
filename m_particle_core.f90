@@ -120,7 +120,7 @@ module m_particle_core
      !> Consider gas temperature effects below this particle velocity
      real(dp)                     :: gas_temperature_vmin = 0.0_dp
      !> Gas mean molecular mass [K], used to sample gas velocities
-     real(dp)                     :: gas_mean_molecular_mass
+     real(dp)                     :: gas_mean_molecular_mass = 0.0_dp
 
      !> List of particles to be removed
      type(LL_int_head_t)          :: clean_list
