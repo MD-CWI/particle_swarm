@@ -843,29 +843,29 @@ contains
     real(dp)                       :: com_vel(3), new_rel_vel, mass_frac
 
     if (molecular_mass > 0.0) then
-      ! The formulas below are implemented as in M. Yousfi et al. 1994:
-      ! http://dx.doi.org/10.1103/PhysRevE.49.3264
-      mass_frac = molecular_mass / (coll%part_mass + molecular_mass)
-      reduced_mass = coll%part_mass * mass_frac
+       ! The formulas below are implemented as in M. Yousfi et al. 1994:
+       ! http://dx.doi.org/10.1103/PhysRevE.49.3264
+       mass_frac = molecular_mass / (coll%part_mass + molecular_mass)
+       reduced_mass = coll%part_mass * mass_frac
 
-      ! Compute center of mass velocity
-      com_vel = (coll%part_mass * part_in%v + molecular_mass * gas_vel) / &
-               (coll%part_mass + molecular_mass)
+       ! Compute center of mass velocity
+       com_vel = (coll%part_mass * part_in%v + molecular_mass * gas_vel) / &
+            (coll%part_mass + molecular_mass)
 
-      new_rel_vel = sqrt(max(0.0, rel_speed**2 - (2.0_dp / reduced_mass) * coll%en_loss))
+       new_rel_vel = sqrt(max(0.0, rel_speed**2 - (2.0_dp / reduced_mass) * coll%en_loss))
 
-      n_part_out = 1
-      part_out(1) = part_in
-      call scatter_isotropic(part_out(1), new_rel_vel, rng)
-      part_out(1)%v = mass_frac * part_out(1)%v + com_vel
+       n_part_out = 1
+       part_out(1) = part_in
+       call scatter_isotropic(part_out(1), new_rel_vel, rng)
+       part_out(1)%v = mass_frac * part_out(1)%v + com_vel
     else
-      old_en  = PC_v_to_en(part_in%v, coll%part_mass)
-      energy  = max(0.0_dp, old_en - coll%en_loss)
-      new_vel = PC_en_to_vel(energy, coll%part_mass)
+       old_en  = PC_v_to_en(part_in%v, coll%part_mass)
+       energy  = max(0.0_dp, old_en - coll%en_loss)
+       new_vel = PC_en_to_vel(energy, coll%part_mass)
 
-      n_part_out  = 1
-      part_out(1) = part_in
-      call scatter_isotropic(part_out(1), new_vel, rng)
+       n_part_out  = 1
+       part_out(1) = part_in
+       call scatter_isotropic(part_out(1), new_vel, rng)
     end if
   end subroutine excite_collision
 
