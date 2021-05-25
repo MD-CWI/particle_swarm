@@ -341,12 +341,21 @@ contains
              ! Do nothing
           case (CS_extrapolate_zero)
              ! Add an extra line at the beginning of the input data with a cross
-             ! section of 0 and an energy slightly lower than the first value
-             n_rows = n_rows + 1
-             ! Shift all array elements (energy and cs) by 1 further in the array
-             cs = cshift(cs, shift=-1, dim=2)
-             cs(1, 1) = cs(1, 2) * (1 - epsilon(1.0_dp))
-             cs(2, 1) = 0
+            ! section of 0 and an energy slightly lower than the first value
+            n_rows = n_rows + 1
+            ! Shift all array elements (energy and cs) by 1 further in the array
+            cs = cshift(cs, shift=-1, dim=2)
+
+            cs(1, 1) = cs(1, 2) * (1 - epsilon(1.0_dp))
+            cs(2, 1) = 0
+
+            ! If the collision has a threshold energy we want the extra 0 cs point to be at this threshold
+            if (col_type == CS_ionize_t .or. col_type == CS_excite_t) then
+               ! tmp_value stores the threshold energy in eV for ionization and excitation collision types
+               if (cs(1, 1) > tmp_value) then
+                  cs(1, 1) = tmp_value
+               end if
+            end if
           case default
              error stop "Invalid value for opt_out_of_bounds_upper"
           end select
