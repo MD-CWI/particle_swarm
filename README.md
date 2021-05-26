@@ -22,6 +22,7 @@ People involved:
 
 * Jannis Teunissen: original author
 * Anbang Sun: testing, fixing bugs, first implementation of magnetic field
+* Andy Martinez: implementation of thermal gas effects, testing against other solvers, fixing bugs
 
 ## Requirements
 
