@@ -191,6 +191,10 @@ module m_particle_core
      procedure, non_overridable :: get_coll_rates
      procedure, non_overridable :: check_space
 
+     ! Routines to access particle properties
+     procedure, non_overridable :: get_x
+     procedure, non_overridable :: get_w
+
      procedure, non_overridable :: sort
      procedure, non_overridable :: sort_in_place
      procedure, non_overridable :: merge_and_split
@@ -398,6 +402,22 @@ contains
     call LT_to_file(self%ratesum_lt, lt_file)
     call LT_to_file(self%rate_lt, lt_file)
   end subroutine to_file
+
+  !> Get particle position
+  function get_x(self, ix) result(x)
+    class(PC_t), intent(in) :: self
+    integer, intent(in)    :: ix
+    real(dp)               :: x(3)
+    x = self%particles(ix)%x
+  end function get_x
+
+  !> Get particle weight
+  function get_w(self, ix) result(w)
+    class(PC_t), intent(in) :: self
+    integer, intent(in)    :: ix
+    real(dp)               :: w
+    w = self%particles(ix)%w
+  end function get_w
 
   subroutine get_colls_of_type(pc, ctype, ixs)
     class(PC_t), intent(in) :: pc
