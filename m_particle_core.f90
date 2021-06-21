@@ -48,7 +48,6 @@ module m_particle_core
 
   !> The particle type
   type, public :: PC_part_t
-     integer  :: ptype  = 0 !< Type of particle (not used yet)
      integer  :: id     = 0 !< Can be used to e.g. optimize code
      real(dp) :: x(3)   = 0 !< Position
      real(dp) :: v(3)   = 0 !< Velocity
@@ -1098,11 +1097,11 @@ contains
   end subroutine add_part
 
   !> Create a particles
-  subroutine create_part(self, x, v, a, weight, t_left, id, ptype)
+  subroutine create_part(self, x, v, a, weight, t_left, id)
     class(PC_t), intent(inout) :: self
     real(dp), intent(IN)       :: x(3), v(3), a(3), weight, t_left
     type(PC_part_t)            :: my_part
-    integer, intent(in), optional :: id, ptype
+    integer, intent(in), optional :: id
     my_part%x      = x
     my_part%v      = v
     my_part%a      = a
@@ -1110,7 +1109,6 @@ contains
     my_part%t_left = t_left
 
     if (present(id)) my_part%id = id
-    if (present(ptype)) my_part%ptype = ptype
 
     call self%add_part(my_part)
   end subroutine create_part
