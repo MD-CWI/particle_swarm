@@ -305,6 +305,9 @@ contains
              n_rows = n_rows + 1
              cs(1, n_rows) = cs(1, n_rows - 1) * (1 + epsilon(1.0_dp))
              cs(2, n_rows) = 0
+          case (CS_extrapolate_constant)
+             continue
+             ! Do nothing
           case (CS_extrapolate_linear)
              ! Linearly extrapolate from the last value in the table to
              ! req_energy. If this cross section value becomes negative we set
