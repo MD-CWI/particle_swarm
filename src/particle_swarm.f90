@@ -41,7 +41,7 @@ contains
     integer                        :: nn, tbl_size, max_num_part
     integer                        :: swarm_size, n_gas_comp, n_gas_frac
     integer                        :: rng_seed(4), num_threads
-    real(dp)                       :: pressure, temperature, max_ev
+    real(dp)                       :: pressure, temperature, max_ev, mean_molecular_mass
     real(dp)                       :: magnetic_field, electric_field, tmp
     character(len=200)             :: cs_file, output_dir, tmp_name
     character(len=20)              :: particle_mover
@@ -235,7 +235,7 @@ contains
         & 1 = Take the lowest point in the input data. 2 = Assume zero.")
     call CFG_add(cfg, "cs_outofbounds_upper", CS_extrapolate_error, &
           "What to do when trying to retrieve cross sections at energies higher than the input data contains. &
-         & 0 = Throw an error. Program will quit. 2 = Assume zero. 3 = Extrapolate linearly to required energy.")
+         & 0 = Throw an error. Program will quit. 1 = Take the highest point in the input data. 2 = Assume zero. 3 = Extrapolate linearly to required energy.")
     
 
     ! Particle model related parameters
