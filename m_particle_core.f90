@@ -37,7 +37,7 @@ module m_particle_core
   integer, parameter :: PC_coll_max_part_out = 2
 
   !> Buffer size for advancing particle in parallel (not important for users)
-  integer, parameter :: PC_advance_buf_size = 1000
+  integer, parameter, public :: PC_advance_buf_size = 1000
 
   !> Initial size of an event list (will be automatically increased when required)
   integer, parameter :: PC_event_list_init_size = 10*1000
@@ -78,6 +78,8 @@ module m_particle_core
      integer          :: i_event = 0
      !> Buffer for events
      type(PC_event_t) :: event(PC_advance_buf_size)
+     !> Ledger to store collision counts
+     real(dp)         :: coll_ledger(PC_max_num_coll) = 0
   end type PC_buf_t
 
   !> Type for directly specifying collision rates
@@ -109,6 +111,10 @@ module m_particle_core
      !> Lookup table with collision rates. Stored separately from ratesum_lt to
      !> prevent loss of significant digits (e.g. in 3-body processes).
      type(LT_t)                   :: rate_lt
+
+     !> Collision ledger, array containing occurences of specific collisions
+     real(dp), allocatable        :: coll_ledger(:)
+
      !> Sum of the collision rates, for null collision method
      type(LT_t)                   :: ratesum_lt
      !> Maximum collision rate
@@ -535,6 +541,7 @@ contains
     buffer%i_part  = 0
     buffer%i_rm    = 0
     buffer%i_event = 0
+    buffer%coll_ledger(:) = 0
   end subroutine init_buffer
 
   !> If the buffers for a thread are getting too full, empty them
@@ -547,10 +554,10 @@ contains
 
     ! The buffer for new particles
     if (buffer%i_part > max_size) then
-       !$omp critical
+       !$omp critical(newpart_critical)
        i = self%n_part
        self%n_part = self%n_part + buffer%i_part
-       !$omp end critical
+       !$omp end critical(newpart_critical)
        call self%check_space(i + buffer%i_part)
        self%particles(i+1:i+buffer%i_part) = buffer%part(1:buffer%i_part)
        buffer%i_part = 0
@@ -568,13 +575,22 @@ contains
 
     ! The buffer for events
     if (buffer%i_event > max_size) then
-       !$omp critical
+       !$omp critical(event_critical)
        i = self%n_events
        call ensure_events_storage(self, buffer%i_event)
        self%n_events = self%n_events + buffer%i_event
-       !$omp end critical
+       !$omp end critical(event_critical)
        self%event_list(i+1:i+buffer%i_event) = buffer%event(1:buffer%i_event)
        buffer%i_event = 0
+    end if
+
+    ! Handle ledger when max_size == 0 (usually last iteration)
+    if (max_size == 0) then
+       i = self%n_colls
+       !$omp critical(ledger_critical)
+       self%coll_ledger = self%coll_ledger + buffer%coll_ledger(1:i)
+       !$omp end critical(ledger_critical)
+       buffer%coll_ledger(1:i) = 0
     end if
   end subroutine handle_buffer
 
@@ -700,6 +716,9 @@ contains
          cIx = get_coll_index(self%ratesum_lt, self%n_colls, self%max_rate, &
               rel_speed, rng%unif_01())
 
+         ! Add reaction to the ledger (also null collisions)
+         buffer%coll_ledger(cIx) = buffer%coll_ledger(cIx) + part%w
+
          if (cIx > 0) then
             ! Perform the corresponding collision
             cType = self%colls(cIx)%type
@@ -710,6 +729,8 @@ contains
 
             select case (cType)
             case (CS_attach_t)
+               ! Note: energy loss of particle due to attachment should be
+               ! handled as an event
                n_coll_out = 0
             case (CS_elastic_t)
                call elastic_collision(part, coll_out, n_coll_out, &
@@ -1269,6 +1290,8 @@ contains
     allocate(self%colls(n_colls))
     allocate(self%cross_secs(n_colls))
     self%cross_secs = cross_secs
+    allocate(self%coll_ledger(n_colls))
+    self%coll_ledger = 0.0_dp
     allocate(self%coll_is_event(n_colls))
     self%coll_is_event(:) = .false.
 
