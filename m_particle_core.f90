@@ -1090,10 +1090,15 @@ contains
   subroutine add_part(self, part)
     class(PC_t), intent(inout)  :: self
     type(PC_part_t), intent(in) :: part
+    integer                     :: ix
 
-    call self%check_space(self%n_part + 1)
-    self%n_part                 = self%n_part + 1
-    self%particles(self%n_part) = part
+    !$omp critical(add_part_critical)
+    self%n_part = self%n_part + 1
+    ix          = self%n_part
+    !$omp end critical(add_part_critical)
+
+    call self%check_space(ix)
+    self%particles(ix) = part
   end subroutine add_part
 
   !> Create a particles
