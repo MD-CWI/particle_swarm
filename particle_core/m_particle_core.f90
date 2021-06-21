@@ -191,7 +191,12 @@ module m_particle_core
      procedure, non_overridable :: get_coll_rates
      procedure, non_overridable :: check_space
 
+     ! Routines to access particle properties
+     procedure, non_overridable :: get_x
+     procedure, non_overridable :: get_w
+
      procedure, non_overridable :: sort
+     procedure, non_overridable :: sort_in_place
      procedure, non_overridable :: merge_and_split
      procedure, non_overridable :: merge_and_split_range
      procedure, non_overridable :: histogram
@@ -397,6 +402,22 @@ contains
     call LT_to_file(self%ratesum_lt, lt_file)
     call LT_to_file(self%rate_lt, lt_file)
   end subroutine to_file
+
+  !> Get particle position
+  function get_x(self, ix) result(x)
+    class(PC_t), intent(in) :: self
+    integer, intent(in)    :: ix
+    real(dp)               :: x(3)
+    x = self%particles(ix)%x
+  end function get_x
+
+  !> Get particle weight
+  function get_w(self, ix) result(w)
+    class(PC_t), intent(in) :: self
+    integer, intent(in)    :: ix
+    real(dp)               :: w
+    w = self%particles(ix)%w
+  end function get_w
 
   subroutine get_colls_of_type(pc, ctype, ixs)
     class(PC_t), intent(in) :: pc
@@ -1384,6 +1405,41 @@ contains
        self%particles(ix) = part_copies(sorted_ixs(ix))
     end do
   end subroutine sort
+
+  !> Sort the particles in place using quicksort
+  subroutine sort_in_place(self, less_than)
+    class(PC_t), intent(inout) :: self
+    integer, parameter         :: QSORT_THRESHOLD = 32
+    integer                    :: array_size
+    interface
+       logical function less_than(a, b)
+         integer, intent(in) :: a, b
+       end function less_than
+    end interface
+
+    include 'qsort_inline.f90'
+
+  contains
+
+    subroutine init()
+      array_size = self%n_part
+    end subroutine init
+
+    subroutine SWAP(a, b)
+      integer, intent(in) :: a, b
+      self%particles([a, b]) = self%particles([b, a])
+    end subroutine SWAP
+
+    subroutine RSHIFT(left, right)
+      integer, intent(in) :: left, right
+      type(PC_part_t)     :: tmp
+
+      tmp                          = self%particles(right)
+      self%particles(left+1:right) = self%particles(left:right-1)
+      self%particles(left)         = tmp
+    end subroutine RSHIFT
+
+  end subroutine sort_in_place
 
   subroutine histogram(self, hist_func, filter_f, &
        filter_args, x_values, y_values)
