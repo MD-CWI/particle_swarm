@@ -78,7 +78,7 @@ module m_particle_core
      !> Buffer for events
      type(PC_event_t) :: event(PC_advance_buf_size)
      !> Ledger to store collision counts
-     real(dp)         :: coll_ledger(PC_max_num_coll) = 0
+     real(dp)         :: coll_ledger(0:PC_max_num_coll) = 0
   end type PC_buf_t
 
   !> Type for directly specifying collision rates
@@ -587,9 +587,9 @@ contains
     if (max_size == 0) then
        i = self%n_colls
        !$omp critical(ledger_critical)
-       self%coll_ledger = self%coll_ledger + buffer%coll_ledger(1:i)
+       self%coll_ledger(0:i) = self%coll_ledger + buffer%coll_ledger(0:i)
        !$omp end critical(ledger_critical)
-       buffer%coll_ledger(1:i) = 0
+       buffer%coll_ledger(0:i) = 0
     end if
   end subroutine handle_buffer
 
@@ -1293,7 +1293,7 @@ contains
     allocate(self%colls(n_colls))
     allocate(self%cross_secs(n_colls))
     self%cross_secs = cross_secs
-    allocate(self%coll_ledger(n_colls))
+    allocate(self%coll_ledger(0:n_colls))
     self%coll_ledger = 0.0_dp
     allocate(self%coll_is_event(n_colls))
     self%coll_is_event(:) = .false.
