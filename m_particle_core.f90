@@ -1655,8 +1655,12 @@ contains
     call self%clean_up()
   end subroutine merge_and_split
 
-  !> Should be thread safe, so it can be called in parallel as long as the
-  !> ranges [i0:i1] don't overlap.
+  !> Routine to merge and split particles in an index range, see merge_and_split
+  !>
+  !> Note: should be thread safe, so it can be called in parallel as long as the
+  !> ranges [i0:i1] don't overlap, and if the pptr_merge and pptr_split do not
+  !> use the random number generator passed to them (although this could be
+  !> fixed).
   subroutine merge_and_split_range(self, i0, i1, x_mask, v_fac, use_v_norm, &
        weight_func, max_merge_distance, pptr_merge, pptr_split)
     use m_mrgrnk
