@@ -1657,10 +1657,7 @@ contains
 
   !> Routine to merge and split particles in an index range, see merge_and_split
   !>
-  !> Note: should be thread safe, so it can be called in parallel as long as the
-  !> ranges [i0:i1] don't overlap, and if the pptr_merge and pptr_split do not
-  !> use the random number generator passed to them (although this could be
-  !> fixed).
+  !> Note: this routine should not be called in parallel
   subroutine merge_and_split_range(self, i0, i1, x_mask, v_fac, use_v_norm, &
        weight_func, max_merge_distance, pptr_merge, pptr_split)
     use m_mrgrnk
@@ -1697,10 +1694,12 @@ contains
     num_part = i1 - i0 + 1
     allocate(weight_ratios(i0:i1))
 
+    !$omp parallel do
     do ix = i0, i1
        weight_ratios(ix) = self%particles(ix)%w / &
             weight_func(self%particles(ix))
     end do
+    !$omp end parallel do
 
     num_merge = count(weight_ratios <= small_ratio)
     num_split = count(weight_ratios >= large_ratio)
