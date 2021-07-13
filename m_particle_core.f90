@@ -27,7 +27,7 @@ module m_particle_core
   integer, parameter  :: dp               = kind(0.0d0)
 
   !> Special weight value indicating a particle has been removed
-  real(dp), parameter :: PC_dead_weight   = -1e100_dp
+  real(dp), parameter, public :: PC_dead_weight   = -1e100_dp
 
   !> The maximum number of collisions
   !> \todo Consider making this a variable again (but check OpenMP performance)
@@ -49,6 +49,7 @@ module m_particle_core
   !> The particle type
   type, public :: PC_part_t
      integer  :: id     = 0 !< Can be used to e.g. optimize code
+     integer  :: tag    = 0 !< Can be used to e.g. optimize code
      real(dp) :: x(3)   = 0 !< Position
      real(dp) :: v(3)   = 0 !< Velocity
      real(dp) :: a(3)   = 0 !< Acceleration
