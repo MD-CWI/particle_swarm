@@ -205,6 +205,7 @@ module m_particle_core
 
      procedure, non_overridable :: sort
      procedure, non_overridable :: sort_in_place
+     procedure, non_overridable :: sort_in_place_by_id_tag
      procedure, non_overridable :: merge_and_split
      procedure, non_overridable :: merge_and_split_range
      procedure, non_overridable :: histogram
@@ -1471,6 +1472,44 @@ contains
     end subroutine RSHIFT
 
   end subroutine sort_in_place
+
+  !> Sort the particles in place using quicksort, based on their id (first) and
+  !> tag (second)
+  subroutine sort_in_place_by_id_tag(self)
+    class(PC_t), intent(inout) :: self
+    integer, parameter         :: QSORT_THRESHOLD = 32
+    integer                    :: array_size
+
+    include 'qsort_inline.f90'
+
+  contains
+
+    pure logical function less_than(a, b)
+      integer, intent(in) :: a, b
+      associate (pa => self%particles(a), pb => self%particles(b))
+        less_than = pa%id < pb%id
+        if (pa%id == pb%id) less_than = pa%tag < pb%tag
+      end associate
+    end function less_than
+
+    subroutine init()
+      array_size = self%n_part
+    end subroutine init
+
+    subroutine SWAP(a, b)
+      integer, intent(in) :: a, b
+      self%particles([a, b]) = self%particles([b, a])
+    end subroutine SWAP
+
+    subroutine RSHIFT(left, right)
+      integer, intent(in) :: left, right
+      type(PC_part_t)     :: tmp
+
+      tmp                          = self%particles(right)
+      self%particles(left+1:right) = self%particles(left:right-1)
+      self%particles(left)         = tmp
+    end subroutine RSHIFT
+  end subroutine sort_in_place_by_id_tag
 
   subroutine histogram(self, hist_func, filter_f, &
        filter_args, x_values, y_values)
