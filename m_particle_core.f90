@@ -121,6 +121,8 @@ module m_particle_core
      real(dp)                     :: max_rate
      !> Inverse of maximum collision rate
      real(dp)                     :: inv_max_rate
+     !> Maximal particle velocity
+     real(dp)                     :: max_vel = 0.0_dp
      !> Background gas temperature [K]
      real(dp)                     :: gas_temperature = 0.0_dp
      !> Consider gas temperature effects below this particle velocity
@@ -1289,6 +1291,7 @@ contains
     real(dp)                  :: max_vel, en_eV
 
     max_vel      = PC_en_to_vel(max_ev * UC_elec_volt, self%mass)
+    self%max_vel = max_vel
     n_colls      = size(cross_secs)
     self%n_colls = n_colls
     allocate(self%colls(n_colls))
@@ -1347,6 +1350,7 @@ contains
     real(dp)                  :: max_vel
 
     max_vel      = PC_en_to_vel(max_ev * UC_elec_volt, self%mass)
+    self%max_vel = max_vel
     n_colls      = size(rate_funcs)
     self%n_colls = n_colls
     allocate(self%colls(n_colls))
