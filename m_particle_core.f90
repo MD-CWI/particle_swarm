@@ -305,7 +305,9 @@ module m_particle_core
   public :: PC_speed_to_en
 
   public :: PC_verlet_advance
+  public :: PC_verlet_cyl_advance
   public :: PC_verlet_correct_accel
+  public :: PC_verlet_cyl_correct_accel
   public :: PC_boris_advance
   public :: PC_tracer_advance_midpoint
   public :: PC_after_dummy
@@ -967,6 +969,28 @@ contains
     part%t_left = part%t_left - dt
   end subroutine PC_verlet_advance
 
+  !> Cylindrical Verlet scheme in which r = norm2(x(1, 3)) and z = x(2)
+  subroutine PC_verlet_cyl_advance(self, part, dt)
+    class(PC_t), intent(in)        :: self
+    type(PC_part_t), intent(inout) :: part
+    real(dp), intent(in)           :: dt
+    real(dp), parameter            :: min_radius = 1e-50_dp
+    real(dp)                       :: r, inv_r, a(3)
+
+    r = sqrt(part%x(1)**2 + part%x(3)**2)
+    if (r < min_radius) r = min_radius
+    inv_r = 1/r
+
+    ! Assume part%a(1) contains magnitude of a_r
+    a(1) = part%a(1) * part%x(1) * inv_r
+    a(2) = part%a(2)
+    a(3) = part%a(1) * part%x(3) * inv_r
+
+    part%x      = part%x + part%v * dt + 0.5_dp * a * dt**2
+    part%v      = part%v + a * dt
+    part%t_left = part%t_left - dt
+  end subroutine PC_verlet_cyl_advance
+
   !> Advance the particle position and velocity over time dt taking into account
   !> a constant magnetic field using Boris method.
   subroutine PC_boris_advance(self, part, dt)
@@ -1052,6 +1076,40 @@ contains
     end do
     !$omp end parallel do
   end subroutine PC_verlet_correct_accel
+
+  !> Cylindrical variant of PC_verlet_correct_accel
+  subroutine PC_verlet_cyl_correct_accel(pc, dt)
+    class(PC_t), intent(inout) :: pc
+    real(dp), intent(in)       :: dt
+    integer                    :: ll
+    real(dp)                   :: new_accel(3)
+    real(dp), parameter        :: min_radius = 1e-50_dp
+    real(dp)                   :: r, inv_r, r_hat(2), dvr(2)
+
+    if (.not. associated(pc%accel_function)) &
+         stop "particle_core error: accel_func is not set"
+
+    !$omp parallel do private(ll, new_accel, r, inv_r, r_hat, dvr)
+    do ll = 1, pc%n_part
+       new_accel = pc%accel_function(pc%particles(ll))
+
+       r = sqrt(pc%particles(ll)%x(1)**2 + pc%particles(ll)%x(3)**2)
+       if (r < min_radius) r = min_radius
+       inv_r = 1/r
+       r_hat = pc%particles(ll)%x([1, 3]) * inv_r
+
+       ! z-component
+       pc%particles(ll)%v(2) = pc%particles(ll)%v(2) + &
+            0.5_dp * (new_accel(2) - pc%particles(ll)%a(2)) * dt
+
+       ! r-component
+       dvr = 0.5_dp * (new_accel(1) - pc%particles(ll)%a(1)) * dt * r_hat
+       pc%particles(ll)%v([1, 3]) = pc%particles(ll)%v([1, 3]) + dvr
+
+       pc%particles(ll)%a = new_accel
+    end do
+    !$omp end parallel do
+  end subroutine PC_verlet_cyl_correct_accel
 
   subroutine set_accel(self)
     class(PC_t), intent(inout) :: self
