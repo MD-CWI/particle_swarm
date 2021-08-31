@@ -119,6 +119,9 @@ contains
 
     call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
     call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
+    
+    mean_molecular_mass = mean_molecular_mass_from_cs(gas_names, gas_fracs, cross_secs)
+    call pc%set_gas_temperature(temperature, 3000.0_dp, mean_molecular_mass)
 
     if (verbose > 0) then
        print *, "--------------------"
@@ -285,5 +288,35 @@ contains
          max(epsilon(1.0_dp), field%Bz**2)
 
   end subroutine get_field_configuration
+
+  ! Calculate the mean molecular mass using the m/M parameters in the elastic cross sections
+  ! and the fractions and species passed to the solver.
+  function mean_molecular_mass_from_cs(gas_names, gas_fracs, cross_secs) result(mean_molecular_mass)
+     use m_cross_sec
+     character(len=20), allocatable :: gas_names(:)
+     real(dp), allocatable          :: gas_fracs(:)
+     type(CS_t), allocatable        :: cross_secs(:)
+     real(dp)                       :: mean_molecular_mass
+     integer                        :: i, j
+     type(CS_coll_t)                :: tmp_coll
+     real(dp)                       :: molecular_mass(size(gas_names))
+     
+
+     do i = 1, size(gas_names)
+          do j = 1, size(cross_secs)
+               if (cross_secs(j)%gas_name == gas_names(i)) then
+                    tmp_coll = cross_secs(j)%coll
+                    
+                    if (tmp_coll%type == CS_elastic_t .or. tmp_coll%type == CS_effective_t) then
+                         molecular_mass(i) = tmp_coll%part_mass / tmp_coll%rel_mass
+                         exit
+                    end if
+               end if
+          end do
+     end do
+
+     mean_molecular_mass = sum(molecular_mass * gas_fracs)
+
+  end function mean_molecular_mass_from_cs
 
 end program particle_swarm
