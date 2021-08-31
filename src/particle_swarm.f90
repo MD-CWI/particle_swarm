@@ -297,30 +297,24 @@ contains
      real(dp), allocatable          :: gas_fracs(:)
      type(CS_t), allocatable        :: cross_secs(:)
      real(dp)                       :: mean_molecular_mass
-     integer                        :: i, j, n_masses_gathered = 0
+     integer                        :: i, j
      type(CS_coll_t)                :: tmp_coll
      real(dp)                       :: molecular_mass(size(gas_names))
      
 
-     do i = 1, size(cross_secs)
-
-          tmp_coll = cross_secs(i)%coll
-     
-          if (tmp_coll%type == CS_elastic_t .or. tmp_coll%type == CS_effective_t) then
-               do j = 1, size(gas_names)
-                    if (gas_names(j) == cross_secs(i)%gas_name) then
-                         molecular_mass(j) = tmp_coll%part_mass / tmp_coll%rel_mass
-                         n_masses_gathered = n_masses_gathered + 1
+     do i = 1, size(gas_names)
+          do j = 1, size(cross_secs)
+               if (cross_secs(j)%gas_name == gas_names(i)) then
+                    tmp_coll = cross_secs(j)%coll
+                    
+                    if (tmp_coll%type == CS_elastic_t .or. tmp_coll%type == CS_effective_t) then
+                         molecular_mass(i) = tmp_coll%part_mass / tmp_coll%rel_mass
                          exit
                     end if
-               end do
-          end if
-
-          if (n_masses_gathered == size(gas_names)) then
-               exit
-          end if
+               end if
+          end do
      end do
-     
+
      mean_molecular_mass = sum(molecular_mass * gas_fracs)
 
   end function mean_molecular_mass_from_cs
