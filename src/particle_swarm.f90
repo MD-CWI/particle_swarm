@@ -120,7 +120,7 @@ contains
     call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
     call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
     
-    mean_molecular_mass = mean_molecular_mass_from_cs(n_gas_comp, gas_names, gas_fracs, cross_secs)
+    mean_molecular_mass = mean_molecular_mass_from_cs(gas_names, gas_fracs, cross_secs)
     call pc%set_gas_temperature(temperature, 3000.0_dp, mean_molecular_mass)
 
     if (verbose > 0) then
@@ -291,13 +291,12 @@ contains
 
   ! Calculate the mean molecular mass using the m/M parameters in the elastic cross sections
   ! and the fractions and species passed to the solver.
-  function mean_molecular_mass_from_cs(n_gas_comp, gas_names, gas_fracs, cross_secs) result(mean_molecular_mass)
+  function mean_molecular_mass_from_cs(gas_names, gas_fracs, cross_secs) result(mean_molecular_mass)
      use m_cross_sec
      character(len=20), allocatable :: gas_names(:)
      real(dp), allocatable          :: gas_fracs(:)
      type(CS_t), allocatable        :: cross_secs(:)
      real(dp)                       :: mean_molecular_mass
-     integer                        :: n_gas_comp
      integer                        :: i, j, n_masses_gathered = 0
      type(CS_coll_t)                :: tmp_coll
      real(dp)                       :: molecular_mass(size(gas_names))
