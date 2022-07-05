@@ -747,6 +747,8 @@ contains
             case (CS_ionize_t)
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
+            case (CS_emission_t)
+               call emission_collision(part, coll_out, n_coll_out)
             case default
                error stop "Wrong collision type"
             end select
@@ -870,6 +872,16 @@ contains
     call scatter_isotropic(part_out(1), norm2(part_out(1)%v), rng)
     part_out(1)%v = part_out(1)%v + com_vel
   end subroutine elastic_collision
+
+  !> Perform an photon generation collision for particle 'll'
+  subroutine emission_collision(part_in, part_out, n_part_out)
+    type(PC_part_t), intent(in)    :: part_in
+    type(PC_part_t), intent(inout) :: part_out(:)
+    integer, intent(out)           :: n_part_out
+
+    n_part_out  = 1
+    part_out(1) = part_in
+  end subroutine emission_collision
 
   !> Perform an excitation-collision for particle 'll'
   subroutine excite_collision(part_in, part_out, n_part_out, coll, &

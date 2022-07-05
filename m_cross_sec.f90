@@ -50,7 +50,7 @@ module m_cross_sec
   integer, parameter, public :: CS_excite_t  = 3
   integer, parameter, public :: CS_ionize_t  = 4
   integer, parameter, public :: CS_effective_t = 5
-  integer, parameter, public :: CS_num_types = 5
+  integer, parameter, public :: CS_emission_t = 6
 
   !> Maximum number of cross sections per gas
   integer, parameter :: max_processes_per_gas = 200
@@ -192,6 +192,8 @@ contains
           col_type = CS_excite_t
        case ("IONIZATION")
           col_type = CS_ionize_t
+       case ("EMISSION")
+          col_type = CS_emission_t
        case ("COMMENT")
           cycle
        case DEFAULT
@@ -490,6 +492,8 @@ contains
           col_name = "Attachment"
        case (CS_ionize_t)
           col_name = "Ionization"
+       case (CS_emission_t)
+          col_name = "Emission"
        case default
           error stop "Unknown collision type"
        end select
