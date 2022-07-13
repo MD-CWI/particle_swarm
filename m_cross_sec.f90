@@ -29,6 +29,7 @@ module m_cross_sec
      real(dp) :: part_mass  = 0
      real(dp) :: rel_mass   = 0
      real(dp) :: en_loss    = 0
+     real(dp) :: gamma_phe  = 0
      ! Flag to optionally indicate the neutral molecule
      integer  :: gas_index  = 0
   end type CS_coll_t
@@ -225,6 +226,8 @@ contains
        case (CS_excite_t, CS_ionize_t)
           ! Energy loss in Joule
           cs_buf(cIx)%coll%en_loss  = tmp_value * UC_elec_volt
+       case (CS_emission_t)
+          cs_buf(cIx)%coll%gamma_phe = tmp_value
        end select
 
        cs_buf(cIx)%gas_name = gas_name
