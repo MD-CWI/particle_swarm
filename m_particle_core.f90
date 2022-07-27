@@ -747,7 +747,9 @@ contains
             case (CS_ionize_t)
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
-            case (CS_emission_t)
+            case (CS_photonL_t)
+               call emission_collision(part, coll_out, n_coll_out)
+            case (CS_photonH_t)
                call emission_collision(part, coll_out, n_coll_out)
             case default
                error stop "Wrong collision type"
