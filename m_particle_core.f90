@@ -216,6 +216,8 @@ module m_particle_core
 
      procedure, non_overridable :: init_from_file
      procedure, non_overridable :: to_file
+     procedure, non_overridable :: write_particles_binary
+     procedure, non_overridable :: read_particles_binary
   end type PC_t
 
   type, abstract, public :: PC_bin_t
@@ -413,6 +415,45 @@ contains
     call LT_to_file(self%ratesum_lt, lt_file)
     call LT_to_file(self%rate_lt, lt_file)
   end subroutine to_file
+
+  !> Save all particles in binary file
+  subroutine write_particles_binary(self, filename)
+    class(PC_t), intent(in)      :: self
+    character(len=*), intent(in) :: filename
+    integer                      :: n, my_unit
+
+    open(newunit=my_unit, file=trim(filename), form='unformatted', &
+         access='stream', status='replace')
+    write(my_unit) self%n_part
+    do n = 1, self%n_part
+       write(my_unit) self%particles(n)
+    end do
+    close(my_unit)
+
+    print *, "write_particles_binary: written ", trim(filename)
+  end subroutine write_particles_binary
+
+  !> Read all particles from binary file
+  subroutine read_particles_binary(self, filename)
+    class(PC_t), intent(inout)   :: self
+    character(len=*), intent(in) :: filename
+    integer                      :: n, my_unit
+
+    open(newunit=my_unit, file=trim(filename), form='unformatted', &
+         access='stream', status='old')
+    read(my_unit) self%n_part
+
+    if (.not. allocated(self%particles)) then
+       error stop "particle list not allocated"
+    else if (size(self%particles) < self%n_part) then
+       error stop "particle list too small to read binary file"
+    end if
+
+    do n = 1, self%n_part
+       read(my_unit) self%particles(n)
+    end do
+    close(my_unit)
+  end subroutine read_particles_binary
 
   !> Get particle position
   function get_x(self, ix) result(x)
