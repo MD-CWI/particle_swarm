@@ -15,7 +15,8 @@ program usage_example
   print *, "   x_max    = ", x_data(4)
   print *, "   n_points = ", 20
   print *, "   n_cols   = ", 2
-  my_lt = LT_create(x_data(1), x_data(4), n_points=20, n_cols=2)
+  my_lt = LT_create(x_data(1), x_data(4), n_points=20, n_cols=2, &
+       xspacing=LT_xspacing_linear)
 
   print *, "The table input is unevenly spaced, using these x-values:"
   write(*, "(4e12.4)") x_data
@@ -48,7 +49,7 @@ contains
     print *, ""
     print *, "3**2 is about:       ", LT_get_col(lt, 1, 3.0_dp)
     print *, "sin(3) is about:     ", LT_get_col(lt, 2, 3.0_dp)
-    print *, "sqrt(3) + 3 is about:", LT_get_col(lt, 3, 3.0_dp)
+    print *, "sqrt(3) is about:    ", LT_get_col(lt, 3, 3.0_dp)
     print *, "----------------------------------------"
     print *, ""
   end subroutine example_1
@@ -65,7 +66,7 @@ contains
     loc = LT_get_loc(my_lt, 3.0_dp)
     print *, "3**2 is about:       ", LT_get_col_at_loc(lt, 1, loc)
     print *, "sin(3) is about:     ", LT_get_col_at_loc(lt, 2, loc)
-    print *, "sqrt(3) + 3 is about:", LT_get_col_at_loc(lt, 3, loc)
+    print *, "sqrt(3) is about:    ", LT_get_col_at_loc(lt, 3, loc)
     print *, "----------------------------------------"
     print *, ""
   end subroutine example_2
@@ -82,7 +83,7 @@ contains
     columns = LT_get_mcol(my_lt, 3.0_dp)
     print *, "3**2 is about:       ", columns(1)
     print *, "sin(3) is about:     ", columns(2)
-    print *, "sqrt(3) + 3 is about:", columns(3)
+    print *, "sqrt(3) is about:    ", columns(3)
     print *, "----------------------------------------"
     print *, ""
   end subroutine example_3
@@ -128,7 +129,7 @@ contains
     print *, "The results should be the same:"
     print *, "3**2 is about:       ", LT_get_col(new_lt, 1, 3.0_dp)
     print *, "sin(3) is about:     ", LT_get_col(new_lt, 2, 3.0_dp)
-    print *, "sqrt(3) + 3 is about:", LT_get_col(new_lt, 3, 3.0_dp)
+    print *, "sqrt(3) is about:    ", LT_get_col(new_lt, 3, 3.0_dp)
     print *, "----------------------------------------"
     print *, ""
   end subroutine example_5
