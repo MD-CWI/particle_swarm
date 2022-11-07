@@ -8,6 +8,7 @@ program test_m_particle_core
   integer, parameter          :: dp       = kind(0.0d0)
   character(len=*), parameter :: cs_file  = "cs_example.txt"
   character(len=*), parameter :: gas_name = "N2"
+  character(len=*), parameter :: ledger_name = "coll_ledger.txt"
 
   integer, parameter      :: max_num_part  = 1000*1000
   integer, parameter      :: init_num_part = 10*1000
@@ -35,6 +36,7 @@ program test_m_particle_core
   print *, "Reading in cross sections from ", trim(cs_file)
   call CS_add_from_file(cs_file, gas_name, neutral_dens, max_en_eV, &
        cross_secs)
+  call CS_create_ledger(cross_secs, ledger_name)
 
   print *, "Initializing particle module"
   call pc%initialize(part_mass, max_num_part)
@@ -63,6 +65,8 @@ program test_m_particle_core
   end do
 
   call print_stats()
+  call CS_write_ledger(pc%coll_ledger, ledger_name, &
+       delta_t * max_num_steps)
 
 contains
 

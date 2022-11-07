@@ -8,6 +8,7 @@ program test_m_particle_core
   integer, parameter :: dp = kind(0.0d0)
   character(len=*), parameter :: cs_file = "test_m_particle_core_cs.txt"
   character(len=*), parameter :: gas_name = "druyv_gas"
+  character(len=*), parameter :: ledger_name = "coll_ledger.txt"
 
   integer, parameter      :: max_num_part  = 1000*1000
   integer, parameter      :: init_num_part = 10*1000
@@ -42,6 +43,8 @@ program test_m_particle_core
   print *, "Total cross sec", norm_cross_sec
   mass_ratio = cross_secs(1)%coll%rel_mass
 
+  call CS_create_ledger(cross_secs, ledger_name)
+
   print *, "Initializing particle module"
   print *, part_mass
   call pc%initialize(part_mass, max_num_part)
@@ -68,6 +71,8 @@ program test_m_particle_core
   end do
 
   call print_stats()
+  call CS_write_ledger(pc%coll_ledger, ledger_name, &
+       delta_t * max_num_steps)
 
 contains
 
