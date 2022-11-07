@@ -1781,7 +1781,9 @@ contains
     allocate(coeff_data(n_coeffs, n_rows))
     allocate(coeff_names(n_coeffs))
 
-    call LT_get_data(self%rate_lt, coeff_data(1, :), coeff_data(2:,:))
+    coeff_data(1, :) = self%rate_lt%x
+    coeff_data(2:, :) = self%rate_lt%cols_rows
+
     coeff_names(1) = "velocity (m/s)"
     do nn = 1, self%n_colls
        select case (self%colls(nn)%type)
