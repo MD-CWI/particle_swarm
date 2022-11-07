@@ -29,6 +29,8 @@ module m_cross_sec
      real(dp) :: part_mass  = 0
      real(dp) :: rel_mass   = 0
      real(dp) :: en_loss    = 0
+     ! Flag to optionally indicate the neutral molecule
+     integer  :: gas_index  = 0
   end type CS_coll_t
 
   !> The type of cross section table
@@ -63,6 +65,8 @@ module m_cross_sec
   ! Methods
   public :: CS_add_from_file
   public :: CS_write_summary
+  public :: CS_create_ledger
+  public :: CS_write_ledger
 
   ! Types of behaviours for dealing with data outside of the input data range
   integer, parameter, public :: CS_extrapolate_error = 0
@@ -305,6 +309,9 @@ contains
              n_rows = n_rows + 1
              cs(1, n_rows) = cs(1, n_rows - 1) * (1 + epsilon(1.0_dp))
              cs(2, n_rows) = 0
+          case (CS_extrapolate_constant)
+             continue
+             ! Do nothing
           case (CS_extrapolate_linear)
              ! Linearly extrapolate from the last value in the table to
              ! req_energy. If this cross section value becomes negative we set
@@ -341,12 +348,21 @@ contains
              ! Do nothing
           case (CS_extrapolate_zero)
              ! Add an extra line at the beginning of the input data with a cross
-             ! section of 0 and an energy slightly lower than the first value
-             n_rows = n_rows + 1
-             ! Shift all array elements (energy and cs) by 1 further in the array
-             cs = cshift(cs, shift=-1, dim=2)
-             cs(1, 1) = cs(1, 2) * (1 - epsilon(1.0_dp))
-             cs(2, 1) = 0
+            ! section of 0 and an energy slightly lower than the first value
+            n_rows = n_rows + 1
+            ! Shift all array elements (energy and cs) by 1 further in the array
+            cs = cshift(cs, shift=-1, dim=2)
+
+            cs(1, 1) = cs(1, 2) * (1 - epsilon(1.0_dp))
+            cs(2, 1) = 0
+
+            ! If the collision has a threshold energy we want the extra 0 cs point to be at this threshold
+            if (col_type == CS_ionize_t .or. col_type == CS_excite_t) then
+               ! tmp_value stores the threshold energy in eV for ionization and excitation collision types
+               if (cs(1, 1) > tmp_value) then
+                  cs(1, 1) = tmp_value
+               end if
+            end if
           case default
              error stop "Invalid value for opt_out_of_bounds_upper"
           end select
@@ -458,9 +474,9 @@ contains
 
     write(my_unit, ERR = 999, FMT = "(A)") "# List of collision processes"
     write(my_unit, ERR = 999, FMT = "(A)") &
-         "Index      Gasname            Coltype     Description"
+         "Index      Gasname            Coltype     Description           Activation Energy (J)"
     write(my_unit, ERR = 999, FMT = "(A)") &
-         "-----------------------------------------------------"
+         "---------------------------------------------------------------------------------------"
 
     do n = 1, size(cross_secs)
        select case (cross_secs(n)%coll%type)
@@ -478,9 +494,9 @@ contains
           error stop "Unknown collision type"
        end select
 
-       write(my_unit, ERR = 999, FMT = "((I4),(A),(A12),(A),(A15),(A),(A25))") &
+       write(my_unit, ERR = 999, FMT = "((I4),(A),(A12),(A),(A15),(A),(A30),(A),(E13.6))") &
             n, "    ", trim(cross_secs(n)%gas_name), "  ", trim(col_name), &
-            "     ", cross_secs(n)%description
+            "     ", cross_secs(n)%description, " ", cross_secs(n)%coll%en_loss
     end do
 
     close(my_unit, STATUS = "KEEP", ERR = 999, IOSTAT = io_state)
@@ -492,5 +508,102 @@ contains
     error stop
 
   end subroutine CS_write_summary
+
+  subroutine CS_create_ledger(cross_secs, filename)
+    use iso_fortran_env, only: error_unit
+    type(CS_t), intent(in)       :: cross_secs(:)
+    character(len=*), intent(in) :: filename
+    character(len=name_len)      :: col_name
+    integer                      :: my_unit, ii, io_state
+
+    my_unit = 333
+
+    open(my_unit, FILE = trim(filename), ACTION = "WRITE", &
+         ERR = 999, IOSTAT = io_state)
+
+    write(my_unit, '(A)') "This document stores that the total (=space and time &
+      &integrated) number of collisions that have occurred. The output is given  &
+      &per collision index (cIx, c.f. *_cs_summary.txt.). The plotting-script &
+      &associated with this data can be found in: &
+      &<path-to-afivo-pic>/tools/plot_ledger.py"
+    write(my_unit, '(A)') " "
+    write(my_unit, '(A)') "The next three rows are: 1. cIx , 2. gas molecule &
+      &involved in collision, 3. collision type. This legend is followed by the &
+      &timesteps the program has completed. Note that a timestamp is appended &
+      &to each output line (i.e. the last column of each row corresponds to the &
+      &simulated time of that output)"
+    write(my_unit, '(A)') " ==================================================== "
+
+    ! Write cIx (given here by loop-counter) to first line
+    do ii = 1, (size(cross_secs(:))-1)
+      write(my_unit, '(I3, A)', advance = "no") ii, " "
+    end do
+    write(my_unit, '(I3)') size(cross_secs(:))
+
+    ! Write neutral molecule type to second line
+    do ii = 1, (size(cross_secs(:))-1)
+      write(my_unit, '(A, A)', advance = "no") trim(cross_secs(ii)%gas_name), " "
+    end do
+    write(my_unit, '(A)') trim(cross_secs(size(cross_secs(:)))%gas_name)
+
+    ! Write collision type to third line
+    do ii = 1, size(cross_secs(:))
+      select case (cross_secs(ii)%coll%type)
+      case (CS_elastic_t)
+        col_name = "Elastic"
+      case (CS_excite_t)
+        col_name = "Excitation"
+      case (CS_attach_t)
+        col_name = "Attachment"
+      case (CS_ionize_t)
+        col_name = "Ionization"
+      end select
+
+      if (ii < size(cross_secs(:))) then
+        write(my_unit, '(A, A)', advance = "no") trim(col_name), " "
+      else
+        write(my_unit, '(A)') trim(col_name)
+      end if
+    end do
+
+    close(my_unit, STATUS = "KEEP", ERR = 999, IOSTAT = io_state)
+    return
+
+999 continue ! If there was an error, the routine will end here
+    write(error_unit, *) "CS_create_ledger error, io_state = ", io_state, &
+         " while writing to ", trim(filename)
+    error stop
+
+  end subroutine CS_create_ledger
+
+  subroutine CS_write_ledger(coll_ledger, filename, timestamp)
+    use iso_fortran_env, only: error_unit
+    real(dp), intent(in)         :: coll_ledger(:)
+    character(LEN=*), intent(in) :: filename
+    real(dp), intent(in)         :: timestamp
+    integer                      :: io_state, my_unit, ii
+
+    my_unit = 333
+
+    open(my_unit, FILE = trim(filename), ACTION = "WRITE", position = "append", &
+          ERR = 998, IOSTAT = io_state)
+
+    do ii = 1, size(coll_ledger)
+      write(my_unit, '(E13.6)', advance = 'no') coll_ledger(ii)
+    end do
+    write(my_unit, *) timestamp
+    close(my_unit, STATUS = "KEEP", ERR = 999, IOSTAT = io_state)
+
+    return
+
+998 continue ! If there was an error, the routine will end here
+    write(error_unit, *) " Error while opening ", trim(filename), ", io_state = ", io_state
+    error stop
+999 continue ! If there was an error, the routine will end here
+    write(error_unit, *) "Error while writing to ", trim(filename), ", io_state = ", io_state
+    error stop
+
+  end subroutine CS_write_ledger
+
 
 end module m_cross_sec

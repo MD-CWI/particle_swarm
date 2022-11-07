@@ -37,7 +37,7 @@ module m_particle_core
   integer, parameter :: PC_coll_max_part_out = 2
 
   !> Buffer size for advancing particle in parallel (not important for users)
-  integer, parameter :: PC_advance_buf_size = 1000
+  integer, parameter, public :: PC_advance_buf_size = 1000
 
   !> Initial size of an event list (will be automatically increased when required)
   integer, parameter :: PC_event_list_init_size = 10*1000
@@ -48,7 +48,6 @@ module m_particle_core
 
   !> The particle type
   type, public :: PC_part_t
-     integer  :: ptype  = 0 !< Type of particle (not used yet)
      integer  :: id     = 0 !< Can be used to e.g. optimize code
      real(dp) :: x(3)   = 0 !< Position
      real(dp) :: v(3)   = 0 !< Velocity
@@ -78,6 +77,8 @@ module m_particle_core
      integer          :: i_event = 0
      !> Buffer for events
      type(PC_event_t) :: event(PC_advance_buf_size)
+     !> Ledger to store collision counts
+     real(dp)         :: coll_ledger(0:PC_max_num_coll) = 0
   end type PC_buf_t
 
   !> Type for directly specifying collision rates
@@ -109,6 +110,10 @@ module m_particle_core
      !> Lookup table with collision rates. Stored separately from ratesum_lt to
      !> prevent loss of significant digits (e.g. in 3-body processes).
      type(LT_t)                   :: rate_lt
+
+     !> Collision ledger, array containing occurences of specific collisions
+     real(dp), allocatable        :: coll_ledger(:)
+
      !> Sum of the collision rates, for null collision method
      type(LT_t)                   :: ratesum_lt
      !> Maximum collision rate
@@ -120,7 +125,7 @@ module m_particle_core
      !> Consider gas temperature effects below this particle velocity
      real(dp)                     :: gas_temperature_vmin = 0.0_dp
      !> Gas mean molecular mass [K], used to sample gas velocities
-     real(dp)                     :: gas_mean_molecular_mass
+     real(dp)                     :: gas_mean_molecular_mass = 0.0_dp
 
      !> List of particles to be removed
      type(LL_int_head_t)          :: clean_list
@@ -191,7 +196,12 @@ module m_particle_core
      procedure, non_overridable :: get_coll_rates
      procedure, non_overridable :: check_space
 
+     ! Routines to access particle properties
+     procedure, non_overridable :: get_x
+     procedure, non_overridable :: get_w
+
      procedure, non_overridable :: sort
+     procedure, non_overridable :: sort_in_place
      procedure, non_overridable :: merge_and_split
      procedure, non_overridable :: merge_and_split_range
      procedure, non_overridable :: histogram
@@ -398,6 +408,22 @@ contains
     call LT_to_file(self%rate_lt, lt_file)
   end subroutine to_file
 
+  !> Get particle position
+  function get_x(self, ix) result(x)
+    class(PC_t), intent(in) :: self
+    integer, intent(in)    :: ix
+    real(dp)               :: x(3)
+    x = self%particles(ix)%x
+  end function get_x
+
+  !> Get particle weight
+  function get_w(self, ix) result(w)
+    class(PC_t), intent(in) :: self
+    integer, intent(in)    :: ix
+    real(dp)               :: w
+    w = self%particles(ix)%w
+  end function get_w
+
   subroutine get_colls_of_type(pc, ctype, ixs)
     class(PC_t), intent(in) :: pc
     integer, intent(in) :: ctype
@@ -514,6 +540,7 @@ contains
     buffer%i_part  = 0
     buffer%i_rm    = 0
     buffer%i_event = 0
+    buffer%coll_ledger(:) = 0
   end subroutine init_buffer
 
   !> If the buffers for a thread are getting too full, empty them
@@ -526,10 +553,10 @@ contains
 
     ! The buffer for new particles
     if (buffer%i_part > max_size) then
-       !$omp critical
+       !$omp critical(newpart_critical)
        i = self%n_part
        self%n_part = self%n_part + buffer%i_part
-       !$omp end critical
+       !$omp end critical(newpart_critical)
        call self%check_space(i + buffer%i_part)
        self%particles(i+1:i+buffer%i_part) = buffer%part(1:buffer%i_part)
        buffer%i_part = 0
@@ -547,13 +574,22 @@ contains
 
     ! The buffer for events
     if (buffer%i_event > max_size) then
-       !$omp critical
+       !$omp critical(event_critical)
        i = self%n_events
        call ensure_events_storage(self, buffer%i_event)
        self%n_events = self%n_events + buffer%i_event
-       !$omp end critical
+       !$omp end critical(event_critical)
        self%event_list(i+1:i+buffer%i_event) = buffer%event(1:buffer%i_event)
        buffer%i_event = 0
+    end if
+
+    ! Handle ledger when max_size == 0 (usually last iteration)
+    if (max_size == 0) then
+       i = self%n_colls
+       !$omp critical(ledger_critical)
+       self%coll_ledger(0:i) = self%coll_ledger + buffer%coll_ledger(0:i)
+       !$omp end critical(ledger_critical)
+       buffer%coll_ledger(0:i) = 0
     end if
   end subroutine handle_buffer
 
@@ -679,6 +715,9 @@ contains
          cIx = get_coll_index(self%ratesum_lt, self%n_colls, self%max_rate, &
               rel_speed, rng%unif_01())
 
+         ! Add reaction to the ledger (also null collisions)
+         buffer%coll_ledger(cIx) = buffer%coll_ledger(cIx) + part%w
+
          if (cIx > 0) then
             ! Perform the corresponding collision
             cType = self%colls(cIx)%type
@@ -689,13 +728,16 @@ contains
 
             select case (cType)
             case (CS_attach_t)
+               ! Note: energy loss of particle due to attachment should be
+               ! handled as an event
                n_coll_out = 0
             case (CS_elastic_t)
                call elastic_collision(part, coll_out, n_coll_out, &
                     self%colls(cIx), gas_vel, rng)
             case (CS_excite_t)
-               call excite_collision(part, coll_out, &
-                    n_coll_out, self%colls(cIx), rng)
+               call excite_collision(part, coll_out, n_coll_out, &
+                    self%colls(cIx), gas_vel, self%gas_mean_molecular_mass, &
+                    rel_speed, rng)
             case (CS_ionize_t)
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
@@ -824,22 +866,48 @@ contains
   end subroutine elastic_collision
 
   !> Perform an excitation-collision for particle 'll'
-  subroutine excite_collision(part_in, part_out, n_part_out, coll, rng)
+  subroutine excite_collision(part_in, part_out, n_part_out, coll, &
+       gas_vel, molecular_mass, rel_speed, rng)
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
     type(CS_coll_t), intent(in)    :: coll
+    !> Velocity of the gas molecule
+    real(dp), intent(in)           :: gas_vel(3)
+    !> Mass to use for the gas molecule (this could be a mean molecular mass due
+    !> to the way collisions are sampled)
+    real(dp), intent(in)           :: molecular_mass
+    !> Relative speed between electron and gas molecule
+    real(dp), intent(in)           :: rel_speed
     type(RNG_t), intent(inout)     :: rng
+    real(dp)                       :: reduced_mass, old_en, energy, new_vel
+    real(dp)                       :: com_vel(3), new_rel_vel, mass_frac
 
-    real(dp)             :: energy, old_en, new_vel
+    if (molecular_mass > 0.0) then
+       ! The formulas below are implemented as in M. Yousfi et al. 1994:
+       ! http://dx.doi.org/10.1103/PhysRevE.49.3264
+       mass_frac = molecular_mass / (coll%part_mass + molecular_mass)
+       reduced_mass = coll%part_mass * mass_frac
 
-    old_en  = PC_v_to_en(part_in%v, coll%part_mass)
-    energy  = max(0.0_dp, old_en - coll%en_loss)
-    new_vel = PC_en_to_vel(energy, coll%part_mass)
+       ! Compute center of mass velocity
+       com_vel = (coll%part_mass * part_in%v + molecular_mass * gas_vel) / &
+            (coll%part_mass + molecular_mass)
 
-    n_part_out  = 1
-    part_out(1) = part_in
-    call scatter_isotropic(part_out(1), new_vel, rng)
+       new_rel_vel = sqrt(max(0.0, rel_speed**2 - (2.0_dp / reduced_mass) * coll%en_loss))
+
+       n_part_out = 1
+       part_out(1) = part_in
+       call scatter_isotropic(part_out(1), new_rel_vel, rng)
+       part_out(1)%v = mass_frac * part_out(1)%v + com_vel
+    else
+       old_en  = PC_v_to_en(part_in%v, coll%part_mass)
+       energy  = max(0.0_dp, old_en - coll%en_loss)
+       new_vel = PC_en_to_vel(energy, coll%part_mass)
+
+       n_part_out  = 1
+       part_out(1) = part_in
+       call scatter_isotropic(part_out(1), new_vel, rng)
+    end if
   end subroutine excite_collision
 
   !> Perform an ionizing collision for particle 'll'
@@ -1022,18 +1090,23 @@ contains
   subroutine add_part(self, part)
     class(PC_t), intent(inout)  :: self
     type(PC_part_t), intent(in) :: part
+    integer                     :: ix
 
-    call self%check_space(self%n_part + 1)
-    self%n_part                 = self%n_part + 1
-    self%particles(self%n_part) = part
+    !$omp critical(add_part_critical)
+    self%n_part = self%n_part + 1
+    ix          = self%n_part
+    !$omp end critical(add_part_critical)
+
+    call self%check_space(ix)
+    self%particles(ix) = part
   end subroutine add_part
 
   !> Create a particles
-  subroutine create_part(self, x, v, a, weight, t_left, id, ptype)
+  subroutine create_part(self, x, v, a, weight, t_left, id)
     class(PC_t), intent(inout) :: self
     real(dp), intent(IN)       :: x(3), v(3), a(3), weight, t_left
     type(PC_part_t)            :: my_part
-    integer, intent(in), optional :: id, ptype
+    integer, intent(in), optional :: id
     my_part%x      = x
     my_part%v      = v
     my_part%a      = a
@@ -1041,7 +1114,6 @@ contains
     my_part%t_left = t_left
 
     if (present(id)) my_part%id = id
-    if (present(ptype)) my_part%ptype = ptype
 
     call self%add_part(my_part)
   end subroutine create_part
@@ -1221,6 +1293,8 @@ contains
     allocate(self%colls(n_colls))
     allocate(self%cross_secs(n_colls))
     self%cross_secs = cross_secs
+    allocate(self%coll_ledger(0:n_colls))
+    self%coll_ledger = 0.0_dp
     allocate(self%coll_is_event(n_colls))
     self%coll_is_event(:) = .false.
 
@@ -1357,6 +1431,41 @@ contains
        self%particles(ix) = part_copies(sorted_ixs(ix))
     end do
   end subroutine sort
+
+  !> Sort the particles in place using quicksort
+  subroutine sort_in_place(self, less_than)
+    class(PC_t), intent(inout) :: self
+    integer, parameter         :: QSORT_THRESHOLD = 32
+    integer                    :: array_size
+    interface
+       logical function less_than(a, b)
+         integer, intent(in) :: a, b
+       end function less_than
+    end interface
+
+    include 'qsort_inline.f90'
+
+  contains
+
+    subroutine init()
+      array_size = self%n_part
+    end subroutine init
+
+    subroutine SWAP(a, b)
+      integer, intent(in) :: a, b
+      self%particles([a, b]) = self%particles([b, a])
+    end subroutine SWAP
+
+    subroutine RSHIFT(left, right)
+      integer, intent(in) :: left, right
+      type(PC_part_t)     :: tmp
+
+      tmp                          = self%particles(right)
+      self%particles(left+1:right) = self%particles(left:right-1)
+      self%particles(left)         = tmp
+    end subroutine RSHIFT
+
+  end subroutine sort_in_place
 
   subroutine histogram(self, hist_func, filter_f, &
        filter_args, x_values, y_values)
@@ -1546,8 +1655,12 @@ contains
     call self%clean_up()
   end subroutine merge_and_split
 
-  !> Should be thread safe, so it can be called in parallel as long as the
-  !> ranges [i0:i1] don't overlap.
+  !> Routine to merge and split particles in an index range, see merge_and_split
+  !>
+  !> Note: should be thread safe, so it can be called in parallel as long as the
+  !> ranges [i0:i1] don't overlap, and if the pptr_merge and pptr_split do not
+  !> use the random number generator passed to them (although this could be
+  !> fixed).
   subroutine merge_and_split_range(self, i0, i1, x_mask, v_fac, use_v_norm, &
        weight_func, max_merge_distance, pptr_merge, pptr_split)
     use m_mrgrnk
