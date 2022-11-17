@@ -1996,14 +1996,18 @@ contains
     class(PC_t), intent(in) :: self
     real(dp)                :: mean_en, weight
     integer                 :: ll
+
     mean_en = 0
     weight  = 0
-    do ll = 1, self%n_part
-       weight  = weight + self%particles(ll)%w
-       mean_en = mean_en + self%particles(ll)%w * &
-            PC_v_to_en(self%particles(ll)%v, self%mass)
-    end do
-    mean_en = mean_en / weight
+
+    if (self%n_part > 0) then
+       do ll = 1, self%n_part
+          weight  = weight + self%particles(ll)%w
+          mean_en = mean_en + self%particles(ll)%w * &
+               PC_v_to_en(self%particles(ll)%v, self%mass)
+       end do
+       mean_en = mean_en / weight
+    end if
   end function get_mean_energy
 
   subroutine get_coll_rates(self, velocity, coll_rates)
