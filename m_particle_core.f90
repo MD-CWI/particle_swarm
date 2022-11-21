@@ -788,10 +788,9 @@ contains
             case (CS_ionize_t)
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
-            case (CS_photonL_t)
-               call emission_collision(part, coll_out, n_coll_out)
-            case (CS_photonH_t)
-               call emission_collision(part, coll_out, n_coll_out)
+            case (CS_photoemission_t)
+               ! Produce an photon event but do not scatter the electron
+               call dummy_collision(part, coll_out, n_coll_out)
             case default
                error stop "Wrong collision type"
             end select
@@ -916,15 +915,15 @@ contains
     part_out(1)%v = part_out(1)%v + com_vel
   end subroutine elastic_collision
 
-  !> Perform an photon generation collision for particle 'll'
-  subroutine emission_collision(part_in, part_out, n_part_out)
+  !> Perform a dummy collision for particle 'll' (which does not change it)
+  subroutine dummy_collision(part_in, part_out, n_part_out)
     type(PC_part_t), intent(in)    :: part_in
     type(PC_part_t), intent(inout) :: part_out(:)
     integer, intent(out)           :: n_part_out
 
     n_part_out  = 1
     part_out(1) = part_in
-  end subroutine emission_collision
+  end subroutine dummy_collision
 
   !> Perform an excitation-collision for particle 'll'
   subroutine excite_collision(part_in, part_out, n_part_out, coll, &
