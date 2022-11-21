@@ -29,6 +29,7 @@ module m_cross_sec
      real(dp) :: part_mass  = 0
      real(dp) :: rel_mass   = 0
      real(dp) :: en_loss    = 0
+     real(dp) :: gamma_phe  = 0
      ! Flag to optionally indicate the neutral molecule
      integer  :: gas_index  = 0
   end type CS_coll_t
@@ -50,7 +51,8 @@ module m_cross_sec
   integer, parameter, public :: CS_excite_t  = 3
   integer, parameter, public :: CS_ionize_t  = 4
   integer, parameter, public :: CS_effective_t = 5
-  integer, parameter, public :: CS_num_types = 5
+  integer, parameter, public :: CS_photonL_t = 6
+  integer, parameter, public :: CS_photonH_t = 7
 
   !> Maximum number of cross sections per gas
   integer, parameter :: max_processes_per_gas = 200
@@ -192,6 +194,10 @@ contains
           col_type = CS_excite_t
        case ("IONIZATION")
           col_type = CS_ionize_t
+       case ("PHOTON-L")
+          col_type = CS_photonL_t
+       case ("PHOTON-H")
+           col_type = CS_photonH_t
        case ("COMMENT")
           cycle
        case DEFAULT
@@ -223,6 +229,8 @@ contains
        case (CS_excite_t, CS_ionize_t)
           ! Energy loss in Joule
           cs_buf(cIx)%coll%en_loss  = tmp_value * UC_elec_volt
+       case (CS_photonL_t)
+          cs_buf(cIx)%coll%gamma_phe = tmp_value
        end select
 
        cs_buf(cIx)%gas_name = gas_name
@@ -490,6 +498,10 @@ contains
           col_name = "Attachment"
        case (CS_ionize_t)
           col_name = "Ionization"
+       case (CS_photonL_t)
+          col_name = "Photon_L"
+       case (CS_photonH_t)
+          col_name = "Photon_H"
        case default
           error stop "Unknown collision type"
        end select
