@@ -36,6 +36,8 @@ module m_cross_sec
      real(dp) :: c1  = 0
      ! Extra numerical parameter for process
      real(dp) :: c2 = 0
+     ! Extra numerical parameter for process
+     real(dp) :: c3 = 0
      ! Flag to optionally indicate the neutral molecule
      integer  :: gas_index  = 0
   end type CS_coll_t
@@ -233,7 +235,14 @@ contains
           ! Energy loss in Joule
           cs_buf(cIx)%coll%en_loss  = tmp_value * UC_elec_volt
        case (CS_photoemission_t)
+          ! c1: the photoemission probability
           cs_buf(cIx)%coll%c1 = tmp_value
+          ! c2: the photoionization probability
+          read(my_unit, FMT = lineFMT, ERR = 999, end = 555) line; nL = nL+1
+          read(line, FMT = *, ERR = 999, end = 555) cs_buf(cIx)%coll%c2
+          ! c3: the photon inverse absorption length [unit: 1/(m bar)]
+          read(my_unit, FMT = lineFMT, ERR = 999, end = 555) line; nL = nL+1
+          read(line, FMT = *, ERR = 999, end = 555) cs_buf(cIx)%coll%c3
        end select
 
        cs_buf(cIx)%gas_name = gas_name
