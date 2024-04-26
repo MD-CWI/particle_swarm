@@ -1,192 +1,94 @@
 #!/usr/bin/env python
 
-# Author: Jannis Teunissen
-# This file should work in both Python 2 and 3
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import argparse
-import tempfile
-import shutil
-import os
-import sys
 import numpy as np
-from subprocess import check_output, CalledProcessError
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from glob import glob
+
+electron_volt = 1.602176634e-19
+electron_mass = 9.10938189e-31
+
+parser = argparse.ArgumentParser(
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    description='''Visualize electron swarm''')
+parser.add_argument('basename', type=str, default='visualize/part_data',
+                    help='Base filename of output files')
+parser.add_argument('-figsize', type=float, nargs=2, default=[8., 5.],
+                    help='Figure size')
+parser.add_argument('-save', type=str,
+                    help='Save animation to file')
+parser.add_argument('-i_x', type=int, default=2,
+                    help='Spatial index to use on x-axis')
+parser.add_argument('-i_y', type=int, default=0,
+                    help='Spatial index to use on y-axis')
+parser.add_argument('-max_eV', type=float, default=10.,
+                    help='Maximum energy in eV for visualization')
+args = parser.parse_args()
+
+files = sorted(glob(args.basename + '*.txt'))
+
+N = len(files)
+positions = []
+velocities = []
+energies_eV = []
+times = np.zeros(N)
+x_min = np.ones(3) * 1e10
+x_max = np.ones(3) * -1e10
+
+for i, fname in enumerate(files):
+    with open(fname) as f:
+        first_line = f.readline().strip()
+        times[i] = float(first_line.split()[1])
+        coords = np.loadtxt(f)
+
+        if coords.ndim == 1:
+            coords = np.reshape(coords, [1, -1])
+
+        r = coords[:, 0:3] * 1e3
+        v = coords[:, 3:6]
+        eV = 0.5 * electron_mass * np.sum(v**2, axis=1) / electron_volt
+
+        x_min = np.minimum(x_min, r.min(axis=0))
+        x_max = np.maximum(x_max, r.max(axis=0))
+
+        positions.append(r.T)
+        velocities.append(v.T)
+        energies_eV.append(eV.T)
 
 
-def get_args():
-    # Get and parse the command line arguments
-    parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description='''Command line interface to compute electron
-        transport data from swarm simulations.
-        Author: Jannis Teunissen, jannis@teunissen.net''',
-        epilog='''Usage example: ./swarm_cli.py input/cs_example.txt
-        -gc N2 1.0 -E_range 1e7 2e7 -E_num 10''')
-    parser.add_argument('cs', type=str,
-                        help='File with cross sections')
-    parser.add_argument('-name', type=str, default='visualize/part_data',
-                        help='Name (including path) of output files')
-    parser.add_argument('-video', action='store_true',
-                        help='Try to generate a video (requires gnuplot + ffpmeg)')
-    parser.add_argument('-plot',
-                        help='Custom gnuplot command')
-    parser.add_argument('-fps', type=float, default=10.,
-                        help='Frames per second for animation')
-    parser.add_argument('-gc', dest='gas_comps', type=str, nargs='+',
-                        required=True, metavar='gas frac',
-                        help='List of gas names and fractions, '
-                        'for example: N2 0.8 O2 0.2')
-    parser.add_argument('-mover', type=str,
-                        choices=['analytic', 'boris', 'verlet'],
-                        default='analytic', help='Choice of particle mover')
-    parser.add_argument('-rng', type=int, nargs=4, default=[0, 0, 0, 0],
-                        help='Random number seed, if all zero auto-generate')
+plt.rcParams['font.size'] = 12
 
-    parser.add_argument('-t', type=float, required=True,
-                        help='End time for visualization')
-    parser.add_argument('-dt', type=float, required=True,
-                        help='Time step for visualization')
-    parser.add_argument('-npart', type=int, default=10,
-                        help='Initial number of particles')
-    parser.add_argument('-v0', type=float, nargs=3, default=[0., 0., 0.],
-                        help='Initial velocity (m/s) of particles')
-    parser.add_argument('-maxpart', type=int, default=1000000,
-                        help='Maximum number of particles')
-    parser.add_argument('-E', type=float, required=True,
-                        help='Electric field value (V/m)')
-    parser.add_argument('-angle', type=float, default=0.0,
-                        help='angle between E and B (degrees)')
-    parser.add_argument('-B', type=float, default=0.0,
-                        help='Magnetic field (T)')
+fig = plt.figure(figsize=(args.figsize), layout='tight')
+dx = 0.1 * (x_max[args.i_x] - x_min[args.i_x])
+dy = 0.1 * (x_max[args.i_y] - x_min[args.i_y])
+ax = fig.add_subplot(autoscale_on=False,
+                     xlim=(x_min[args.i_x] - dx, x_max[args.i_x] + dx),
+                     ylim=(x_min[args.i_y] - dx, x_max[args.i_y] + dx))
+ax.set_aspect('equal')
+ax.set_xlabel('mm')
+ax.set_ylabel('mm')
 
-    parser.add_argument('-T', type=float, default=300.,
-                        metavar='temperature', help='Gas temperature (K)')
-    parser.add_argument('-p', type=float, default=1.0,
-                        metavar='pressure', help='Gas pressure (bar)')
-    return parser.parse_args()
+scat = ax.scatter([], [], c=[], alpha=1.0, s=20., vmin=0.,
+                  vmax=args.max_eV, marker='o', cmap='cool')
+time_text = ax.text(0.1, 0.8, '', transform=ax.transAxes)
+plt.colorbar(scat, ax=ax, location='top', label='eV', shrink=0.5)
 
 
-def create_swarm_cfg(tmpdir, args):
-    fname = tmpdir + '/base_cfg.txt'
-    f = open(fname, 'w')
-    f.write('output_dir = ' + tmpdir + '\n')
-    f.write('gas_file = ' + args.cs + '\n')
-    f.write('swarm_name = visualize\n')
-    f.write('gas_components = ' + ' '.join(args.gas_comps[0::2]) + '\n')
-    f.write('gas_fractions = ' + ' '.join(args.gas_comps[1::2]) + '\n')
-    f.write('gas_pressure = ' + str(args.p) + '\n')
-    f.write('gas_temperature = ' + str(args.T) + '\n')
-    f.write('swarm_size = ' + str(args.npart) + '\n')
-    f.write('consecutive_run = F\n')
-    f.write('dry_run = F\n')
-    f.write('visualize_only = T\n')
-    f.write('visualize_rotate_Ez = T\n')
-    f.write('visualize_init_v0 = ' + ' '.join(map(str, args.v0)) + '\n')
-    f.write('visualize_end_time = ' + str(args.t) + '\n')
-    f.write('visualize_dt_output = ' + str(args.dt) + '\n')
-    f.write('visualize_max_particles = ' + str(args.maxpart) + '\n')
-    f.write('visualize_base_name = ' + args.name + '\n')
-    f.write('electric_field = ' + str(args.E) + '\n')
-    f.write('magnetic_field = ' + str(args.B) + '\n')
-    f.write('field_angle_degrees = ' + str(args.angle) + '\n')
-    f.write('particle_mover = ' + args.mover + '\n')
-    f.write('particle_rng_seed = ' + ' '.join(map(str, args.rng)) + '\n')
-    f.close()
-    return fname
+def animate(i):
+    scat.set_offsets(np.c_[positions[i][args.i_x],
+                           positions[i][args.i_y]])
+    scat.set_color(scat.to_rgba(energies_eV[i]))
+
+    n_particles = len(positions[i][args.i_x])
+    time_text.set_text(f't = {times[i]*1e9:.2f} ns, N = {n_particles}')
+    return scat, time_text
 
 
-def pswarm_wrapper(cmd_and_num):
-    cmd, num = cmd_and_num
-    try:
-        res = check_output(cmd)
-    except:
-        print("Error when running: " + cmd)
-        sys.exit(1)
-    num.value += 1
-    return res
+ani = animation.FuncAnimation(
+    fig, animate, N, interval=50, blit=True)
 
-
-def print_swarm_info(args):
-    print("Starting particle swarm visualization")
-    print("----------------------------------------")
-    print("Cross section file : {}".format(args.cs))
-    print("Gas components     : {}".format(' '.join(args.gas_comps[0::2])))
-    print("Gas fractions      : {}".format(' '.join(args.gas_comps[1::2])))
-    print("Temperature (K)    : {}".format(args.T))
-    print("Pressure (bar)     : {}".format(args.p))
-    print("Particle mover     : {}".format(args.mover))
-    print("Output base name   : {}".format(args.name))
-    print("----------------------------------------")
-    print("Electric field (V/m) : {}".format(args.E))
-    print("Magnetic field (T)   : {}".format(args.B))
-    print("Angle (degrees)      : {}".format(args.angle))
-    print("----------------------------------------")
-
-
-if __name__ == '__main__':
-    args = get_args()
-
-    print_swarm_info(args)
-
-    try:
-        tmpdir = tempfile.mkdtemp(dir=os.getcwd())
-
-        args.dirname, args.basename = os.path.split(args.name)
-        if args.dirname == '':
-            args.dirname = '.'
-
-        if not os.path.exists(args.dirname):
-            os.makedirs(args.dirname)
-
-        base_cfg = create_swarm_cfg(tmpdir, args)
-
-        # Perform a dry run of particle_swarm to generate lookup tables for the
-        # cross sections
-        try:
-            out = check_output(['./particle_swarm', base_cfg])
-        except CalledProcessError as e:
-            print("particle_swarm returned an error")
-            print(e.output)
-            sys.exit(1)
-
-        gpscript = args.dirname + '/script.gp'
-        ix_max = int(round(args.t/args.dt))
-        last_file = '{}_{:06d}.txt'.format(args.name, ix_max)
-
-        with open(last_file) as f:
-            lines = f.readlines()
-            # Sensitive to file syntax!
-            rmin = np.array(map(float, lines[2].split()[6:9]))
-            rmax = np.array(map(float, lines[3].split()[6:9]))
-
-        dsize = rmax - rmin
-        rmax = rmin + dsize.max()
-
-        if args.video:
-            with open(gpscript, 'w') as gp:
-                gp.write("set terminal pngcairo size 800,600 enhanced\n" +
-                         "unset xtics; set xlabel 'x'\n" +
-                         "unset ytics; set ylabel 'y'\n" +
-                         "unset ztics; set zlabel 'z'\n" +
-                         "set xrange [{}:{}]\n".format(rmin[0], rmax[0]) +
-                         "set yrange [{}:{}]\n".format(rmin[1], rmax[1]) +
-                         "set zrange [{}:{}]\n".format(rmin[2], rmax[2]) +
-                         "set view equal xyz\n" +
-                         "do for [i=0:{}] {{\n".format(ix_max) +
-                         "set output sprintf('{}_%06d.png', i)\n".format(args.basename) +
-                         "splot sprintf('{}_%06d.txt', i)".format(args.basename) +
-                         " u 1:2:3 notitle w p pt 7 ps 0.5}\n")
-
-            os.system('cd {} && gnuplot script.gp'.format(args.dirname))
-            cmd = 'ffmpeg -y -r {} -f image2 -i {}_%06d.png -vframes {} {}.mp4'.format(
-                args.fps, args.name, ix_max+1, args.name)
-            os.system(cmd)
-            print("Generated {}.mp4".format(args.name))
-
-    finally:
-        shutil.rmtree(tmpdir)
-
+if args.save:
+    ani.save(args.save, fps=30, dpi=200)
+else:
+    plt.show()
