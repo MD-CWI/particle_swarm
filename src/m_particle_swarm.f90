@@ -555,6 +555,7 @@ contains
   end subroutine SWARM_visualize
 
   subroutine write_particles(pc, base_name, time, cntr, rotmat)
+    use m_units_constants
     type(PC_t), intent(inout)    :: pc
     character(len=*), intent(in) :: base_name
     character(len=200)           :: file_name
@@ -564,9 +565,9 @@ contains
     integer                      :: i
     integer, parameter           :: my_unit = 300
     real(dp), allocatable        :: pdata(:, :)
-    real(dp), save               :: rmin(3), rmax(3)
+    real(dp)                     :: rmin(3), rmax(3), vmin(3), vmax(3), v2max
 
-    write(file_name, "(A,I6.6,A)") base_name // "_", cntr, ".txt"
+    write(file_name, "(A,I6.6,A)") base_name // "_particles_", cntr, ".txt"
     open(my_unit, file=trim(file_name))
 
     allocate(pdata(6, pc%n_part))
@@ -580,19 +581,14 @@ contains
     pdata(2:3, :) = matmul(rotmat, pdata(2:3, :))
     pdata(5:6, :) = matmul(rotmat, pdata(5:6, :))
 
-    if (cntr == 1) then
-       rmin = minval(pdata(1:3, :), dim=2)
-       rmax = maxval(pdata(1:3, :), dim=2)
-    else
-       rmin = min(rmin, minval(pdata(1:3, :), dim=2))
-       rmax = max(rmax, maxval(pdata(1:3, :), dim=2))
-    end if
+    rmin = minval(pdata(1:3, :), dim=2)
+    rmax = maxval(pdata(1:3, :), dim=2)
+    vmin = minval(pdata(4:6, :), dim=2)
+    vmax = maxval(pdata(4:6, :), dim=2)
+    v2max = maxval(sum(pdata(4:6, :)**2, dim=1))
 
-    ! Write header
-    write(my_unit, "(A)") "# File with particle coordinates: x(3) v(3)"
-    write(my_unit, "(A,E12.4)") "# time =", time
-    write(my_unit, "(A,3E12.4)") "# rmin (up to now) =", rmin
-    write(my_unit, "(A,3E12.4)") "# rmax (up to now) =", rmax
+    ! header
+    write(my_unit, *) pc%n_part, time
 
     do i = 1, pc%n_part
        write(my_unit, *) pdata(:, i)
