@@ -1,6 +1,6 @@
 module m_particle_swarm
   use m_particle_core
-  use iso_fortran_env, only: int64
+  use iso_fortran_env, only: int64, error_unit
 
   implicit none
   private
@@ -650,14 +650,12 @@ contains
 
        call update_td_from_ps(tds, ps, pc)
 
-       if (verbose > 1) call SWARM_print_results(tds, pc, verbose)
-
        if (n_swarms >= n_swarms_min) then
           ! Check whether the results are accurate enough
           call get_accuracy(tds, rel_error)
           if (verbose > 0) then
              imax = maxloc(rel_error)
-             write(*, '(I6,A40,F12.4)') n_swarms, &
+             write(error_unit, '(I6,A40,F12.4)') n_swarms, &
                   trim(tds(imax(1))%description), rel_error(imax(1))
           end if
 
@@ -725,7 +723,7 @@ contains
     ! when the swarm is approximately relaxed to the background field.
     tau = sqrt(0.5_dp * en_eV * UC_elec_mass / UC_elem_charge) / &
          norm2(SWARM_field%E_vec)
-    if (verbose > 1) print *, "dt for energy relaxation", tau
+    if (verbose > 1) write(error_unit, *) "dt for energy relaxation", tau
 
     ! Create linear table with unit variance and zero mean
     do i = 1, frame_size
@@ -749,18 +747,17 @@ contains
 
        ! Compute correlation between en_hist and a line
        correl = sum((en_hist - mean_en) * t_hist) / (frame_size * stddev)
-       if (verbose > 1) print *, cntr, "energy correlation", correl
+       if (verbose > 1) write(error_unit, *) cntr, "energy correlation", correl
        ! If the correlation is sufficiently small, exit
        if (cntr > min_its_relax .and. abs(correl) < 0.25_dp) exit
     end do
   end subroutine create_swarm
 
-  subroutine SWARM_print_results(tds, pc, verbose)
+  subroutine SWARM_print_results(tds, pc)
     use m_units_constants
     use m_gas
     type(SWARM_td_t), intent(in) :: tds(:) !< The transport data
     type(pc_t), intent(in)       :: pc
-    integer, intent(in)          :: verbose
     integer                      :: i, i_dim
     real(dp)                     :: fac, tmp, std, N0, val
     real(dp)                     :: energy, mu, rel_error(size(tds))

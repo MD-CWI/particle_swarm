@@ -1,4 +1,5 @@
 program particle_swarm
+  use iso_fortran_env, only: error_unit
   use m_config
   use m_particle_core
   use m_particle_swarm
@@ -26,7 +27,7 @@ program particle_swarm
      call SWARM_visualize(pc, swarm_size, cfg)
   else
      call SWARM_get_data(pc, swarm_size, td, verbose, max_cpu_time)
-     call SWARM_print_results(td, pc, verbose)
+     call SWARM_print_results(td, pc)
   end if
 
 contains
@@ -84,7 +85,8 @@ contains
     call CFG_get(cfg, "output_dir", output_dir)
 
     tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_config.txt"
-    if (verbose > 0) print *, "Writing configuration to ", trim(tmp_name)
+    if (verbose > 0) &
+         write(error_unit, *) "Writing configuration to ", trim(tmp_name)
     call CFG_write(cfg, trim(tmp_name))
 
     call CFG_get(cfg, "gas_file", cs_file)
@@ -119,28 +121,28 @@ contains
 
     call pc%initialize(UC_elec_mass, max_num_part, rng_seed)
     call pc%use_cross_secs(max_ev, tbl_size, cross_secs)
-    
+
     mean_molecular_mass = mean_molecular_mass_from_cs(gas_names, gas_fracs, cross_secs)
     call pc%set_gas_temperature(temperature, 3000.0_dp, mean_molecular_mass)
 
     if (verbose > 0) then
-       print *, "--------------------"
-       print *, "Gas information"
-       write(*, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
-       print *, ""
-       print *, "Component - fraction"
+       write(error_unit, *) "--------------------"
+       write(error_unit, *) "Gas information"
+       write(error_unit, fmt="(A10,A3,E9.3)") "Temp. (K)", " - ", temperature
+       write(error_unit, *) ""
+       write(error_unit, *) "Component - fraction"
        do nn = 1, n_gas_comp
-          write(*, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
+          write(error_unit, fmt="(A10,A3,E9.3)") trim(gas_names(nn)), " - ", &
                gas_fracs(nn)
        end do
-       print *, ""
+       write(error_unit, *) ""
     end if
 
     tmp_name = trim(output_dir) // "/" // trim(swarm_name) // "_coeffs.txt"
-    if (verbose > 0) &
-         print *, "Writing colrate table (as text) to ", trim(tmp_name)
+    if (verbose > 0) write(error_unit, *) &
+         "Writing colrate table (as text) to ", trim(tmp_name)
     call IO_write_coeffs(pc, trim(tmp_name))
-    if (verbose > 0) print *, "--------------------"
+    if (verbose > 0) write(error_unit, *) "--------------------"
 
     call CFG_get(cfg, "particle_mover", particle_mover)
     call CFG_get(cfg, "magnetic_field", magnetic_field)
@@ -232,7 +234,7 @@ contains
          "The file in which to find cross section data")
     call CFG_add(cfg, "gas_fractions", (/1.0_dp /), &
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
-    
+
     call CFG_add(cfg, "cs_outofbounds_lower", CS_extrapolate_constant, &
          "What to do when trying to retrieve cross sections at energies lower than the input data contains. &
         & 1 = Take the lowest point in the input data. 2 = Assume zero.")
@@ -240,7 +242,7 @@ contains
           "What to do when trying to retrieve cross sections at energies higher than the input data contains. &
          & 0 = Throw an error. Program will quit. 1 = Take the highest point in the input data. &
          & 2 = Assume zero. 3 = Extrapolate linearly to required energy.")
-    
+
 
     ! Particle model related parameters
     call CFG_add(cfg, "particle_rng_seed", [0, 0, 0, 0], &
@@ -300,13 +302,13 @@ contains
      integer                        :: i, j
      type(CS_coll_t)                :: tmp_coll
      real(dp)                       :: molecular_mass(size(gas_names))
-     
+
 
      do i = 1, size(gas_names)
           do j = 1, size(cross_secs)
                if (cross_secs(j)%gas_name == gas_names(i)) then
                     tmp_coll = cross_secs(j)%coll
-                    
+
                     if (tmp_coll%type == CS_elastic_t .or. tmp_coll%type == CS_effective_t) then
                          molecular_mass(i) = tmp_coll%part_mass / tmp_coll%rel_mass
                          exit
