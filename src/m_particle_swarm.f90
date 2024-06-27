@@ -153,12 +153,16 @@ contains
     call CFG_get(cfg, "acc_velocity", rel_abs_acc)
     tds(ix_flux_v)%rel_acc = rel_abs_acc(1)
     tds(ix_flux_v)%abs_acc = rel_abs_acc(2)
+
+    call CFG_get(cfg, "acc_bulk_velocity", rel_abs_acc)
     tds(ix_bulk_v)%rel_acc = rel_abs_acc(1)
     tds(ix_bulk_v)%abs_acc = rel_abs_acc(2)
 
     call CFG_get(cfg, "acc_diffusion", rel_abs_acc)
     tds(ix_flux_diff)%rel_acc = rel_abs_acc(1)
     tds(ix_flux_diff)%abs_acc = rel_abs_acc(2)
+
+    call CFG_get(cfg, "acc_bulk_diffusion", rel_abs_acc)
     tds(ix_bulk_diff)%rel_acc = rel_abs_acc(1)
     tds(ix_bulk_diff)%abs_acc = rel_abs_acc(2)
 
@@ -615,12 +619,13 @@ contains
     integer             :: n_measurements
     integer             :: n, n_swarms, imax(1)
     real(dp)            :: dt, t_relax, t_measure, growth_rate
-    real(dp)            :: rel_error(SWARM_num_td), t0, t1
+    real(dp)            :: rel_error(SWARM_num_td)
+    integer(int64)      :: t0, t1, cr
     type(part_stats_t)  :: ps
 
     call create_swarm(pc, ps, swarm_size, verbose)
 
-    call cpu_time(t0)
+    call system_clock(t0, count_rate=cr)
 
     ! Loop over the swarms until converged
     do n_swarms = 1, n_swarms_max
@@ -655,12 +660,14 @@ contains
           call get_accuracy(tds, rel_error)
           if (verbose > 0) then
              imax = maxloc(rel_error)
-             write(error_unit, '(I6,A40,F12.4)') n_swarms, &
-                  trim(tds(imax(1))%description), rel_error(imax(1))
+             write(error_unit, '(I6,A40,A12,F10.2)') n_swarms, &
+                  trim(tds(imax(1))%description), 'error/goal', &
+                  rel_error(imax(1))
           end if
 
-          call cpu_time(t1)
-          if (all(rel_error < 1.0_dp) .or. t1 - t0 > max_cpu_time) exit
+          call system_clock(t1)
+          if (all(rel_error < 1.0_dp) .or. &
+               (t1 - t0)/real(cr, dp) > max_cpu_time) exit
        end if
     end do
 
@@ -681,15 +688,12 @@ contains
 
     do i = 1, size(rel_error)
        n = tds(i)%n_measurements
-       ! Below we use the norm for vector-based transport data, so that
-       ! orientation of the field should not matter
+
+       ! Use the norm for vector-based transport data, and compute standard
+       ! deviation of the mean
        mean = norm2(tds(i)%val)
-       if (n > 1) then
-          var = maxval(tds(i)%var / (n-1)) / n ! Maximal variance
-       else
-          var = maxval(tds(i)%var / (n)) / n ! Maximal variance
-       end if
-       stddev = sqrt(var)                      ! Standard deviation of the mean
+       var = sum(tds(i)%var) / (n * max(1.0_dp, n - 1.0_dp))
+       stddev = sqrt(var)
 
        rel_error(i) = min(stddev / max(tds(i)%rel_acc * mean, eps), &
             stddev / max(tds(i)%abs_acc, eps))

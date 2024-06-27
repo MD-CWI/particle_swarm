@@ -214,12 +214,17 @@ contains
     call CFG_add(cfg, "output_dir", "output", &
          "The output directory (include no trailing slash!)")
 
-    call CFG_add(cfg, "acc_velocity_sq", [5.0e-3_dp, 0.0_dp], &
+    call CFG_add(cfg, "acc_velocity_sq", [1.0e-2_dp, 0.0_dp], &
          "The required rel/abs accuracy of the velocity squared")
     call CFG_add(cfg, "acc_velocity", [5.0e-3_dp, 0.0_dp], &
          "The required rel/abs accuracy of the velocity")
+    call CFG_add(cfg, "acc_bulk_velocity", [1e100_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the bulk velocity. Note that in &
+         &strongly attaching gases, there can be strong noise.")
     call CFG_add(cfg, "acc_diffusion", [1.0e-2_dp, 0.0_dp], &
          "The required rel/abs accuracy of the diffusion coeff.")
+    call CFG_add(cfg, "acc_bulk_diffusion", [1e100_dp, 0.0_dp], &
+         "The required rel/abs accuracy of the bulk diffusion coeff.")
     call CFG_add(cfg, "acc_alpha", [5.0e-3_dp, 1.0e1_dp], &
          "The required rel/abs accuracy of the ionization coeff.")
 
