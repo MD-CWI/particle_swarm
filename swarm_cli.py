@@ -275,7 +275,6 @@ if __name__ == '__main__':
         split_result = [result for result in split_result
                         if "warning" not in result.decode("ascii")]
         for j, line in enumerate(split_result):
-            print(line)
             values = line[40:].split()
             data[i, j] = values[0]
             sigma[i, j] = values[1]
