@@ -634,7 +634,7 @@ contains
     if (max_size == 0) then
        i = self%n_colls
        !$omp critical(ledger_critical)
-       self%coll_ledger(0:i) = self%coll_ledger + buffer%coll_ledger(0:i)
+       self%coll_ledger(0:i) = self%coll_ledger(0:i) + buffer%coll_ledger(0:i)
        !$omp end critical(ledger_critical)
        buffer%coll_ledger(0:i) = 0
     end if
@@ -1467,6 +1467,8 @@ contains
     n_colls      = size(rate_funcs)
     self%n_colls = n_colls
     allocate(self%colls(n_colls))
+    allocate(self%coll_ledger(0:n_colls))
+    self%coll_ledger = 0.0_dp
     allocate(self%coll_is_event(n_colls))
     self%coll_is_event(:) = .false.
 
