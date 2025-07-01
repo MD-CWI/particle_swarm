@@ -213,6 +213,8 @@ contains
          "The initial size of a swarm")
     call CFG_add(cfg, "output_dir", "output", &
          "The output directory (include no trailing slash!)")
+    call CFG_add(cfg, "measurements_per_collision", 1.0_dp, &
+         "Number of measurements per collision time")
 
     call CFG_add(cfg, "acc_velocity_sq", [1.0e-2_dp, 0.0_dp], &
          "The required rel/abs accuracy of the velocity squared")

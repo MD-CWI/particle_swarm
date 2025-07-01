@@ -34,7 +34,7 @@ module m_particle_swarm
   integer, allocatable :: attachment_colls(:)
 
   !> Number of measurements per collision time
-  real(dp), parameter :: measurements_per_collision = 1.0_dp
+  real(dp) :: measurements_per_collision = 1.0_dp
 
   !> Type for storing transport data
   type SWARM_td_t
@@ -144,6 +144,9 @@ contains
        end select
        call init_td(tds(ix_rates(n)), 1, name, "1/s")
     end do
+
+    call CFG_get(cfg, "measurements_per_collision", &
+         measurements_per_collision)
 
     ! Get accuracy requirements
     call CFG_get(cfg, "acc_velocity_sq", rel_abs_acc)
@@ -391,7 +394,7 @@ contains
 
        x = pc%particles(ix)%x
        v = pc%particles(ix)%v
-       sum_cov = sum_cov + (x - mean_x) * (v - mean_v)
+       sum_cov = sum_cov + x * (v - mean_v)
        sum_x2 = sum_x2 + x**2
 
        call pc%get_coll_rates(norm2(v), rates)
@@ -634,11 +637,12 @@ contains
        t_relax        = fac * sum(ps%flux_v2) / &
             abs(dot_product(SWARM_field%E_vec, ps%flux_v))
        t_measure      = t_relax
+
        ! Aim for measurements_per_collision measurements per collision time
        n_measurements = nint(t_measure * ps%coll_rate * &
             measurements_per_collision)
        ! Limit range of n_measurements
-       n_measurements = min(10000, max(10, n_measurements))
+       n_measurements = min(10000, max(1, n_measurements))
        dt             = t_measure / n_measurements
        growth_rate    = abs(ps%i_rate - ps%a_rate)
 
@@ -765,6 +769,8 @@ contains
     integer                      :: i, i_dim
     real(dp)                     :: fac, tmp, std, N0, val
     real(dp)                     :: energy, mu, rel_error(size(tds))
+    real(dp)                     :: val_par(3), val_perp(3)
+    real(dp)                     :: var_par(3), var_perp(3)
     logical                      :: magnetic_field_used
     character(len=2)             :: dimnames(3) = [" x", " y", " z"]
 
@@ -861,27 +867,47 @@ contains
        call print_td("Bulk mobility (m2/V/s)", mu, std)
        call print_td("Bulk mobility *N (1/m/V/s)", mu*N0, std*N0)
 
-       ! Longitudinal diffusion
-       val = tds(ix_flux_diff)%val(3)
-       std = sqrt(tds(ix_flux_diff)%var(3))
-       call print_td("Flux L diffusion coef. (m2/s)", val, std)
-       call print_td("Flux L diffusion coef. *N (1/m/s)", val*N0, std*N0)
+       ! Flux diffusion
+       call get_parallel_perp_components(tds(ix_flux_diff)%val, &
+            SWARM_field%E_vec, val_par, val_perp)
+       call get_parallel_perp_components(tds(ix_flux_diff)%var, &
+            SWARM_field%E_vec, var_par, var_perp)
 
-       val = tds(ix_bulk_diff)%val(3)
-       std = sqrt(tds(ix_bulk_diff)%var(3))
-       call print_td("Bulk L diffusion coef. (m2/s)", val, std)
-       call print_td("Bulk L diffusion coef. *N (1/m/s)", val*N0, std*N0)
+       call print_td("Flux L diffusion coef. (m2/s)", &
+            norm2(val_par), &
+            fac * sqrt(sum(var_par)))
+       call print_td("Flux L diffusion coef. *N (1/m/s)", &
+            norm2(val_par)*N0, &
+            fac * sqrt(sum(var_par))*N0)
 
-       ! Transverse diffusion
-       val = 0.5_dp * sum(tds(ix_flux_diff)%val(1:2))
-       std = sqrt(0.5_dp * sum(tds(ix_flux_diff)%var(1:2)))
-       call print_td("Flux T diffusion coef. (m2/s)", val, std)
-       call print_td("Flux T diffusion coef. *N (1/m/s)", val*N0, std*N0)
+       ! Use factor 0.5 here to get the average contribution from each
+       ! transversal direction
+       call print_td("Flux T diffusion coef. (m2/s)", &
+            sqrt(sum(0.5_dp * val_perp**2)), &
+            fac * sqrt(0.5_dp * sum(var_perp)))
+       call print_td("Flux T diffusion coef. *N (1/m/s)", &
+            sqrt(sum(0.5_dp * val_perp**2))*N0, &
+            fac * sqrt(0.5_dp * sum(var_perp))*N0)
 
-       val = 0.5_dp * sum(tds(ix_bulk_diff)%val(1:2))
-       std = sqrt(0.5_dp * sum(tds(ix_bulk_diff)%var(1:2)))
-       call print_td("Bulk T diffusion coef. (m2/s)", val, std)
-       call print_td("Bulk T diffusion coef. *N (1/m/s)", val*N0, std*N0)
+       ! Bulk diffusion
+       call get_parallel_perp_components(tds(ix_bulk_diff)%val, &
+            SWARM_field%E_vec, val_par, val_perp)
+       call get_parallel_perp_components(tds(ix_bulk_diff)%var, &
+            SWARM_field%E_vec, var_par, var_perp)
+
+       call print_td("Bulk L diffusion coef. (m2/s)", &
+            norm2(val_par), &
+            fac * sqrt(sum(var_par)))
+       call print_td("Bulk L diffusion coef. *N (1/m/s)", &
+            norm2(val_par)*N0, &
+            fac * sqrt(sum(var_par))*N0)
+
+       call print_td("Bulk T diffusion coef. (m2/s)", &
+            sqrt(sum(0.5_dp * val_perp**2)), &
+            fac * sqrt(0.5_dp * sum(var_perp)))
+       call print_td("Bulk T diffusion coef. *N (1/m/s)", &
+            sqrt(sum(0.5_dp * val_perp**2))*N0, &
+            fac * sqrt(0.5_dp * sum(var_perp))*N0)
     end if
 
     call get_accuracy(tds, rel_error)
@@ -903,6 +929,19 @@ contains
     end do
 
   end subroutine SWARM_print_results
+
+  !> Determine the parallel/perpendicular components of a with respect to b
+  subroutine get_parallel_perp_components(a, b, par, perp)
+    real(dp), intent(in)  :: a(3)
+    real(dp), intent(in)  :: b(3)
+    real(dp), intent(out) :: par(3)
+    real(dp), intent(out) :: perp(3)
+    real(dp)              :: b_unitvec(3)
+
+    b_unitvec = b / norm2(b)
+    par = dot_product(a, b_unitvec) * b_unitvec
+    perp = a - par
+  end subroutine get_parallel_perp_components
 
   subroutine print_td(name, val, stddev, convergence)
     character(len=*), intent(in)   :: name
