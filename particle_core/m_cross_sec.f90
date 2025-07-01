@@ -26,9 +26,18 @@ module m_cross_sec
 
   type CS_coll_t
      integer  :: type       = -1
+     ! Mass of the particle (typically electron) being scattered
      real(dp) :: part_mass  = 0
+     ! Mass ratio between particle and the gas molecule it scatters with
      real(dp) :: rel_mass   = 0
+     ! How much energy is lost in the collision
      real(dp) :: en_loss    = 0
+     ! Extra numerical parameter for process
+     real(dp) :: c1  = 0
+     ! Extra numerical parameter for process
+     real(dp) :: c2 = 0
+     ! Extra numerical parameter for process
+     real(dp) :: c3 = 0
      ! Flag to optionally indicate the neutral molecule
      integer  :: gas_index  = 0
   end type CS_coll_t
@@ -50,7 +59,7 @@ module m_cross_sec
   integer, parameter, public :: CS_excite_t  = 3
   integer, parameter, public :: CS_ionize_t  = 4
   integer, parameter, public :: CS_effective_t = 5
-  integer, parameter, public :: CS_num_types = 5
+  integer, parameter, public :: CS_photoemission_t = 6
 
   !> Maximum number of cross sections per gas
   integer, parameter :: max_processes_per_gas = 200
@@ -192,6 +201,8 @@ contains
           col_type = CS_excite_t
        case ("IONIZATION")
           col_type = CS_ionize_t
+       case ("PHOTOEMISSION")
+          col_type = CS_photoemission_t
        case ("COMMENT")
           cycle
        case DEFAULT
@@ -223,6 +234,15 @@ contains
        case (CS_excite_t, CS_ionize_t)
           ! Energy loss in Joule
           cs_buf(cIx)%coll%en_loss  = tmp_value * UC_elec_volt
+       case (CS_photoemission_t)
+          ! c1: the photoemission probability
+          cs_buf(cIx)%coll%c1 = tmp_value
+          ! c2: the photoionization probability
+          read(my_unit, FMT = lineFMT, ERR = 999, end = 555) line; nL = nL+1
+          read(line, FMT = *, ERR = 999, end = 555) cs_buf(cIx)%coll%c2
+          ! c3: the photon inverse absorption length [unit: 1/(m bar)]
+          read(my_unit, FMT = lineFMT, ERR = 999, end = 555) line; nL = nL+1
+          read(line, FMT = *, ERR = 999, end = 555) cs_buf(cIx)%coll%c3
        end select
 
        cs_buf(cIx)%gas_name = gas_name
@@ -490,6 +510,8 @@ contains
           col_name = "Attachment"
        case (CS_ionize_t)
           col_name = "Ionization"
+       case (CS_photoemission_t)
+          col_name = "Photoemission"
        case default
           error stop "Unknown collision type"
        end select

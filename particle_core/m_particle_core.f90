@@ -634,7 +634,7 @@ contains
     if (max_size == 0) then
        i = self%n_colls
        !$omp critical(ledger_critical)
-       self%coll_ledger(0:i) = self%coll_ledger + buffer%coll_ledger(0:i)
+       self%coll_ledger(0:i) = self%coll_ledger(0:i) + buffer%coll_ledger(0:i)
        !$omp end critical(ledger_critical)
        buffer%coll_ledger(0:i) = 0
     end if
@@ -788,6 +788,9 @@ contains
             case (CS_ionize_t)
                call ionization_collision(part, coll_out, &
                     n_coll_out, self%colls(cIx), rng)
+            case (CS_photoemission_t)
+               ! Produce an photon event but do not scatter the electron
+               call dummy_collision(part, coll_out, n_coll_out)
             case default
                error stop "Wrong collision type"
             end select
@@ -911,6 +914,16 @@ contains
     call scatter_isotropic(part_out(1), norm2(part_out(1)%v), rng)
     part_out(1)%v = part_out(1)%v + com_vel
   end subroutine elastic_collision
+
+  !> Perform a dummy collision for particle 'll' (which does not change it)
+  subroutine dummy_collision(part_in, part_out, n_part_out)
+    type(PC_part_t), intent(in)    :: part_in
+    type(PC_part_t), intent(inout) :: part_out(:)
+    integer, intent(out)           :: n_part_out
+
+    n_part_out  = 1
+    part_out(1) = part_in
+  end subroutine dummy_collision
 
   !> Perform an excitation-collision for particle 'll'
   subroutine excite_collision(part_in, part_out, n_part_out, coll, &
@@ -1454,6 +1467,8 @@ contains
     n_colls      = size(rate_funcs)
     self%n_colls = n_colls
     allocate(self%colls(n_colls))
+    allocate(self%coll_ledger(0:n_colls))
+    self%coll_ledger = 0.0_dp
     allocate(self%coll_is_event(n_colls))
     self%coll_is_event(:) = .false.
 
@@ -1996,14 +2011,18 @@ contains
     class(PC_t), intent(in) :: self
     real(dp)                :: mean_en, weight
     integer                 :: ll
+
     mean_en = 0
     weight  = 0
-    do ll = 1, self%n_part
-       weight  = weight + self%particles(ll)%w
-       mean_en = mean_en + self%particles(ll)%w * &
-            PC_v_to_en(self%particles(ll)%v, self%mass)
-    end do
-    mean_en = mean_en / weight
+
+    if (self%n_part > 0) then
+       do ll = 1, self%n_part
+          weight  = weight + self%particles(ll)%w
+          mean_en = mean_en + self%particles(ll)%w * &
+               PC_v_to_en(self%particles(ll)%v, self%mass)
+       end do
+       mean_en = mean_en / weight
+    end if
   end function get_mean_energy
 
   subroutine get_coll_rates(self, velocity, coll_rates)
