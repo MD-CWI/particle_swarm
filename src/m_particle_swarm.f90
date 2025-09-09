@@ -438,15 +438,20 @@ contains
     type(part_stats_t), intent(in)  :: ps
     type(PC_t), intent(in)          :: pc
     integer                         :: n
-    real(dp)                        :: species_density
+    real(dp)                        :: species_density, E_hat(3)
+
+    E_hat = SWARM_field%E_vec / norm2(SWARM_field%E_vec)
 
     call update_td(tds(ix_flux_v2), ps%flux_v2)
     call update_td(tds(ix_flux_v), ps%flux_v)
     call update_td(tds(ix_bulk_v), ps%bulk_v)
     call update_td(tds(ix_bulk_diff), ps%bulk_dif)
     call update_td(tds(ix_flux_diff), ps%cov_xv / ps%n_samples)
-    call update_td(tds(ix_alpha), [ps%i_rate / norm2(ps%flux_v)])
-    call update_td(tds(ix_eta), [ps%a_rate / norm2(ps%flux_v)])
+
+    ! This will be overwritten in the end, but is used to check for convergence
+    call update_td(tds(ix_alpha), [ps%i_rate / norm2(E_hat * ps%flux_v)])
+    call update_td(tds(ix_eta), [ps%a_rate / norm2(E_hat * ps%flux_v)])
+
     call update_td(tds(ix_coll_rate), [ps%coll_rate])
     call update_td(tds(ix_ionization), [ps%i_rate])
     call update_td(tds(ix_attachment), [ps%a_rate])
@@ -680,7 +685,21 @@ contains
        error stop "No convergence"
     end if
 
+    call recompute_data_at_end(tds)
+
   end subroutine SWARM_get_data
+
+  subroutine recompute_data_at_end(tds)
+    type(SWARM_td_t), intent(inout) :: tds(:)
+    real(dp)                        :: E_hat(3)
+
+    ! Recompute alpha and eta. This avoids a tiny bias (due to the division).
+    E_hat = SWARM_field%E_vec / norm2(SWARM_field%E_vec)
+    tds(ix_alpha)%val(1) = tds(ix_ionization)%val(1) / &
+         norm2(E_hat * tds(ix_flux_v)%val)
+    tds(ix_eta)%val(1) = tds(ix_attachment)%val(1) / &
+         norm2(E_hat * tds(ix_flux_v)%val)
+  end subroutine recompute_data_at_end
 
   !> Compute uncertainty in transport data relative to requirements
   subroutine get_accuracy(tds, rel_error)
