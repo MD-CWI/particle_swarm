@@ -24,6 +24,10 @@ People involved:
 * Anbang Sun: testing, fixing bugs, first implementation of magnetic field
 * Andy Martinez: implementation of thermal gas effects, testing against other solvers, fixing bugs
 
+How to cite:
+
+* https://doi.org/10.5281/zenodo.17209434
+
 ## Requirements
 
 1. Particle model: gfortran 4.8 or newer
