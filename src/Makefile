@@ -4,7 +4,7 @@ INCDIRS	:= ../particle_core
 LIBDIRS := ../particle_core
 LIBS	:= particle_core
 FC	:= gfortran
-FFLAGS	:= -Wall -O2 -std=f2008 -fopenmp -Wno-unused-dummy-argument
+FFLAGS	:= -Wall -O2 -g -std=f2008 -fopenmp -Wno-unused-dummy-argument
 
 ifeq ($(DEBUG), 1)
 	FFLAGS += -fcheck=all -g -pg -ffpe-trap=invalid,zero,overflow \
