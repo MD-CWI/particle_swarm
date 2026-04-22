@@ -36,6 +36,9 @@ module m_particle_swarm
   !> Number of measurements per collision time
   real(dp) :: measurements_per_collision = 1.0_dp
 
+  !> Initial energy (in eV) of electrons in a new swarm
+  real(dp) :: swarm_initial_eV = 1.0_dp
+
   !> Type for storing transport data
   type SWARM_td_t
      character(len=40)     :: description    !< Description
@@ -147,6 +150,8 @@ contains
 
     call CFG_get(cfg, "measurements_per_collision", &
          measurements_per_collision)
+
+    call CFG_get(cfg, "initial_eV", swarm_initial_eV)
 
     ! Get accuracy requirements
     call CFG_get(cfg, "acc_velocity_sq", rel_abs_acc)
@@ -430,6 +435,25 @@ contains
     ps%a_rate    = sum(ps%rates(attachment_colls))
 
   end subroutine update_particle_stats
+
+  subroutine get_average_coll_rates(pc, coll_rates)
+    type(PC_t), intent(in) :: pc
+    real(dp), intent(out)  :: coll_rates(pc%n_colls)
+    real(dp)               :: rates(pc%n_colls)
+    integer                :: ix, num_part
+
+    num_part = pc%get_num_sim_part()
+    coll_rates(:) = 0.0_dp
+
+    !$omp parallel do private(rates) reduction(+:coll_rates)
+    do ix = 1, num_part
+       call pc%get_coll_rates(norm2(pc%particles(ix)%v), rates)
+       coll_rates(:) = coll_rates(:) + rates(:)
+    end do
+    !$omp end parallel do
+
+    coll_rates(:) = coll_rates(:) / num_part
+  end subroutine get_average_coll_rates
 
   subroutine update_td_from_ps(tds, ps, pc)
     use m_units_constants
@@ -740,16 +764,26 @@ contains
     integer, parameter    :: min_its_relax = 5
     integer               :: i, cntr
     real(dp)              :: en_hist(frame_size), t_hist(frame_size)
-    real(dp)              :: mean_en, correl, stddev, tau
+    real(dp)              :: mean_en, correl, stddev
+    real(dp)              :: tau_gain, tau_attach, tau
+    real(dp)              :: avg_rates(pc%n_colls)
 
     ! Create a new swarm with 1 eV electrons
-    call new_swarm(pc, swarm_size, init_eV=1.0_dp)
+    call new_swarm(pc, swarm_size, init_eV=swarm_initial_eV)
 
     ! An electron accelerating from zero velocity gains en_eV in this time (in
     ! the absence of a magnetic field). This time step is only used to determine
     ! when the swarm is approximately relaxed to the background field.
-    tau = sqrt(0.5_dp * en_eV * UC_elec_mass / UC_elem_charge) / &
+    tau_gain = sqrt(0.5_dp * en_eV * UC_elec_mass / UC_elem_charge) / &
          norm2(SWARM_field%E_vec)
+
+    ! Time scale for electron loss
+    call get_average_coll_rates(pc, avg_rates)
+    tau_attach = 1/(sum(avg_rates(attachment_colls)) + epsilon(1.0_dp))
+
+    ! Set tau to minimum
+    tau = min(tau_gain, tau_attach)
+
     if (verbose > 1) write(error_unit, *) "dt for energy relaxation", tau
 
     ! Create linear table with unit variance and zero mean
