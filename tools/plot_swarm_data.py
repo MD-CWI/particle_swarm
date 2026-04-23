@@ -16,7 +16,7 @@ parser.add_argument('in_file', type=argparse.FileType('r'),
 parser.add_argument('parameter', type=str, nargs='+',
                     default=['Mean energy (eV)'],
                     help='Which quantity to plot')
-parser.add_argument('-x', type=str, default=['Electric field / N (Td)'],
+parser.add_argument('-x', type=str, default='Electric field / N (Td)',
                     help='Use this as x-axis')
 args = parser.parse_args()
 

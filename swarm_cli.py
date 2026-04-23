@@ -16,90 +16,96 @@ import sys
 import math
 import numpy as np
 import pandas as pd
-from subprocess import check_output
+import subprocess
 
 
 def get_args():
     # Get and parse the command line arguments
-    parser = argparse.ArgumentParser(
+    p = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         description='''Command line interface to compute electron
         transport data from swarm simulations.
         Author: Jannis Teunissen, jannis@teunissen.net''',
         epilog='''Usage example: ./swarm_cli.py input/cs_example.txt
         -gc N2 1.0 -E_range 1e7 2e7 -E_num 10''')
-    parser.add_argument('cs', type=str,
-                        help='File with cross sections')
-    parser.add_argument('-o', type=str, default='swarm_data.csv',
-                        help='Transport data output file')
-    parser.add_argument('-verbose', type=int, default=0,
-                        help='Enable verbose output if > 0')
-    parser.add_argument('-sigma', action='store_true',
-                        help='Include standard deviations in output')
-    parser.add_argument('-gc', dest='gas_comps', type=str, nargs='+',
-                        required=True, metavar='gas frac',
-                        help='List of gas names and fractions, '
-                        'for example: N2 0.8 O2 0.2')
-    parser.add_argument('-mover', type=str,
-                        choices=['analytic', 'boris', 'verlet'],
-                        default='analytic', help='Choice of particle mover')
-    parser.add_argument('-eV_max', type=float, default=500.0,
-                        help='Maximum particle energy in eV')
-    parser.add_argument('-max_cpu_time', type=float, default=600.0,
-                        help='Maximum CPU time per swarm')
+    p.add_argument('cs', type=str,
+                   help='File with cross sections')
+    p.add_argument('-o', type=str, default='swarm_data.csv',
+                   help='Transport data output file')
+    p.add_argument('-verbose', type=int, default=0,
+                   help='Enable verbose output if > 0')
+    p.add_argument('-sigma', action='store_true',
+                   help='Include standard deviations in output')
+    p.add_argument('-gc', dest='gas_comps', type=str, nargs='+',
+                   required=True, metavar='gas frac',
+                   help='List of gas names and fractions, '
+                   'for example: N2 0.8 O2 0.2')
+    p.add_argument('-mover', type=str,
+                   choices=['analytic', 'boris', 'verlet'],
+                   default='analytic', help='Choice of particle mover')
+    p.add_argument('-eV_max', type=float, default=500.0,
+                   help='Maximum particle energy in eV')
+    p.add_argument('-max_cpu_time', type=float, default=600.0,
+                   help='Maximum CPU time per swarm')
+    p.add_argument('-extrapolate_above', type=str,
+                   choices=['error', 'zero', 'constant', 'linear', 'log'],
+                   help='How to extrapolate of cross sections above data')
+    p.add_argument('-extrapolate_below', type=str,
+                   choices=['error', 'zero', 'constant'],
+                   help='How to extrapolate of cross sections below data')
 
-    g = parser.add_mutually_exclusive_group()
+    g = p.add_mutually_exclusive_group()
     g.add_argument('-E', type=float, nargs='+',
                    help='Electric field value(s)')
     g.add_argument('-E_range', nargs=2, type=float, default=[1e7, 1e7],
                    help='min/max electric field')
 
-    parser.add_argument('-E_unit', type=str, default='SI',
-                        choices=['SI', 'Td'],
-                        help='Electric field unit')
-    parser.add_argument('-E_vary', type=str, default='lin',
-                        choices=['lin', 'quad', 'log'],
-                        help='How to vary electric field')
-    parser.add_argument('-E_num', type=int, default=1,
-                        help='Number of electric fields')
+    p.add_argument('-E_unit', type=str, default='SI',
+                   choices=['SI', 'Td'],
+                   help='Electric field unit')
+    p.add_argument('-E_vary', type=str, default='lin',
+                   choices=['lin', 'quad', 'log'],
+                   help='How to vary electric field')
+    p.add_argument('-E_num', type=int, default=1,
+                   help='Number of electric fields')
 
-    g = parser.add_mutually_exclusive_group()
+    g = p.add_mutually_exclusive_group()
     g.add_argument('-angle', type=float,
                    help='angle between E and B (degrees)')
     g.add_argument('-angle_range', nargs=2, type=float, default=[0., 0.],
                    help='min/max angle (degrees)')
-    parser.add_argument('-angle_num', type=int, default=1,
-                        help='Number of angles')
+    p.add_argument('-angle_num', type=int, default=1,
+                   help='Number of angles')
 
-    g = parser.add_mutually_exclusive_group()
+    g = p.add_mutually_exclusive_group()
     g.add_argument('-B', type=float, nargs='+',
                    help='Magnetic field value(s) (T)')
     g.add_argument('-B_range', nargs=2, type=float, default=[0., 0.],
                    help='min/max magnetic field (T)')
-    parser.add_argument('-B_vary', type=str, choices=['lin', 'log'],
-                        default='lin', help='How to vary magnetic field')
-    parser.add_argument('-B_num', type=int, default=1,
-                        help='Number of magnetic fields')
+    p.add_argument('-B_vary', type=str, choices=['lin', 'log'],
+                   default='lin', help='How to vary magnetic field')
+    p.add_argument('-B_num', type=int, default=1,
+                   help='Number of magnetic fields')
 
-    parser.add_argument('-T', type=float, default=300.,
-                        metavar='temperature', help='Gas temperature (K)')
-    parser.add_argument('-p', type=float, default=1.0,
-                        metavar='pressure', help='Gas pressure (bar)')
+    p.add_argument('-T', type=float, default=300.,
+                   metavar='temperature', help='Gas temperature (K)')
+    p.add_argument('-p', type=float, default=1.0,
+                   metavar='pressure', help='Gas pressure (bar)')
 
-    parser.add_argument('-acc_v2', type=float, nargs=2, default=(1e-3, 0.0),
-                        metavar=('rel', 'abs'),
-                        help='Required rel./abs. error in velocity squared')
-    parser.add_argument('-acc_v', type=float, nargs=2, default=(5e-3, 0.0),
-                        metavar=('rel', 'abs'),
-                        help='Required rel./abs. error in velocity')
-    parser.add_argument('-acc_D', type=float, nargs=2, default=(1e-2, 0.0),
-                        metavar=('rel', 'abs'),
-                        help='Required rel./abs. error in diff. coeff')
-    parser.add_argument('-acc_a', type=float, nargs=2, default=(5e-3, 10.0),
-                        metavar=('rel', 'abs'),
-                        help='Required rel./abs. error in alpha')
+    p.add_argument('-acc_v2', type=float, nargs=2, default=(1e-3, 0.0),
+                   metavar=('rel', 'abs'),
+                   help='Required rel./abs. error in velocity squared')
+    p.add_argument('-acc_v', type=float, nargs=2, default=(5e-3, 0.0),
+                   metavar=('rel', 'abs'),
+                   help='Required rel./abs. error in velocity')
+    p.add_argument('-acc_D', type=float, nargs=2, default=(1e-2, 0.0),
+                   metavar=('rel', 'abs'),
+                   help='Required rel./abs. error in diff. coeff')
+    p.add_argument('-acc_a', type=float, nargs=2, default=(5e-3, 10.0),
+                   metavar=('rel', 'abs'),
+                   help='Required rel./abs. error in alpha')
 
-    return parser.parse_args()
+    return p.parse_args()
 
 
 def create_swarm_cfg(tmpdir, args):
@@ -124,6 +130,13 @@ def create_swarm_cfg(tmpdir, args):
         f.write('max_cpu_time = ' + str(args.max_cpu_time) + '\n')
         f.write('particle_mover = ' + args.mover + '\n')
         f.write('verbose = ' + str(args.verbose) + '\n')
+
+        if args.extrapolate_above is not None:
+            f.write('cs_outofbounds_upper = ' +
+                    args.extrapolate_above + '\n')
+        if args.extrapolate_below is not None:
+            f.write('cs_outofbounds_lower = ' +
+                    args.extrapolate_below + '\n')
 
     return fname
 
@@ -251,8 +264,26 @@ if __name__ == '__main__':
                     progress_bar(100. * i / n_runs)
                     i += 1
                     var_cfg = create_var_cfg(tmpdir, i, names, [E, angle, B])
-                    res = check_output([particle_swarm_exec_path,
-                                        base_cfg, var_cfg])
+                    cmd = [particle_swarm_exec_path, base_cfg, var_cfg]
+
+                    try:
+                        res = subprocess.check_output(cmd,
+                                                      stderr=subprocess.STDOUT)
+                    except subprocess.CalledProcessError as e:
+                        print("\nError running particle_swarm "
+                              "(exit code {}):".format(e.returncode),
+                              file=sys.stderr)
+                        print("  E = {:.4E} V/m, B = {:.4E} T, "
+                              "angle = {:.2f} deg".format(E, B, angle),
+                              file=sys.stderr)
+                        print("  Output: {}".format(
+                              e.output.decode('utf-8', errors='replace')),
+                              file=sys.stderr)
+                        raise
+                    except OSError as e:
+                        print("\nFailed to execute particle_swarm: "
+                              "{}".format(e), file=sys.stderr)
+                        raise
                     swarm_data.append(res)
     finally:
         progress_bar(100.)

@@ -49,7 +49,7 @@ contains
     character(len=20), allocatable :: gas_names(:)
     real(dp), allocatable          :: gas_fracs(:)
     type(CS_t), allocatable        :: cross_secs(:)
-    integer                        :: out_of_bounds_lower, out_of_bounds_upper
+    character(len=20)              :: out_of_bounds_lower, out_of_bounds_upper
 
     ! Create default parameters for the simulation (routine contained below)
     call create_sim_config(cfg)
@@ -244,14 +244,13 @@ contains
     call CFG_add(cfg, "gas_fractions", (/1.0_dp /), &
          & "The partial pressure of the gases (as if they were ideal gases)", .true.)
 
-    call CFG_add(cfg, "cs_outofbounds_lower", CS_extrapolate_constant, &
+    call CFG_add(cfg, "cs_outofbounds_lower", "constant", &
          "What to do when trying to retrieve cross sections at energies lower than the input data contains. &
-        & 1 = Take the lowest point in the input data. 2 = Assume zero.")
-    call CFG_add(cfg, "cs_outofbounds_upper", CS_extrapolate_error, &
-          "What to do when trying to retrieve cross sections at energies higher than the input data contains. &
-         & 0 = Throw an error. Program will quit. 1 = Take the highest point in the input data. &
-         & 2 = Assume zero. 3 = Extrapolate linearly to required energy.")
-
+        & Option: constant (use lowest value), zero (assume zero).")
+    call CFG_add(cfg, "cs_outofbounds_upper", "error", &
+          "How to extrapolate cross sections at energies higher than the input data contains. &
+         & Options: error (quit), constant (use last value), zero (set to zero), &
+         & linear (extrapolate), log (extrapolate so log(cs) has constant slope).")
 
     ! Particle model related parameters
     call CFG_add(cfg, "particle_rng_seed", [0, 0, 0, 0], &
