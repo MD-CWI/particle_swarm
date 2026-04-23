@@ -1,4 +1,7 @@
 !> Module that allows working with a configuration file
+!>
+!> Author: Jannis Teunissen and others
+!> Repository: https://github.com/jannisteunissen/config_fortran
 module m_config
 
   implicit none
@@ -27,12 +30,16 @@ module m_config
 
   integer, parameter :: CFG_name_len   = 80  !< Maximum length of variable names
   integer, parameter :: CFG_string_len = 200 !< Fixed length of string type
+  !> Maximum length of line containing multiple arguments/values
+  integer, parameter :: CFG_max_line_len = 1000
 
   !> Maximum number of entries in a variable (if it's an array)
   integer, parameter :: CFG_max_array_size = 1000
 
+  character, parameter :: tab_char = char(9)
+
   !> The separator(s) for array-like variables (space, comma, ', ", and tab)
-  character(len=*), parameter :: CFG_separators = " ,'"""//char(9)
+  character(len=*), parameter :: CFG_separators = " ,'"""//tab_char
 
   !> The separator for categories (stored in var_name)
   character(len=*), parameter :: CFG_category_separator = "%"
@@ -58,7 +65,7 @@ module m_config
      !> How the variable has been set (default, command line, file)
      integer                       :: set_by = CFG_set_by_default
      !> Data that has been read in for this variable
-     character(len=CFG_string_len) :: stored_data
+     character(len=CFG_max_line_len) :: stored_data
 
      ! These are the arrays used for storage. In the future, a "pointer" based
      ! approach could be used.
@@ -110,6 +117,7 @@ module m_config
   ! Constants
   public :: CFG_name_len
   public :: CFG_string_len
+  public :: CFG_max_line_len
   public :: CFG_max_array_size
 
   ! Public methods
@@ -124,6 +132,7 @@ module m_config
   public :: CFG_write_markdown
   public :: CFG_read_file
   public :: CFG_update_from_arguments
+  public :: CFG_update_from_line
   public :: CFG_clear
 
 contains
@@ -137,15 +146,21 @@ contains
     type(CFG_t),intent(inout)     :: cfg
     !> Ignore unknown arguments (default: false)
     logical, intent(in), optional :: ignore_unknown
-    character(len=CFG_string_len) :: arg
-    integer                       :: ix, n
+    character(len=CFG_max_line_len) :: arg
+    integer                       :: ix, n, arg_status
     logical                       :: valid_syntax, strict
     character(len=4)              :: extension
 
     strict = .true.; if (present(ignore_unknown)) strict = .not. ignore_unknown
 
     do ix = 1, command_argument_count()
-       call get_command_argument(ix, arg)
+       call get_command_argument(ix, arg, status=arg_status)
+
+       if (arg_status > 0) then
+          call handle_error("Error in get_command_argument (status > 0)")
+       else if (arg_status == -1) then
+          call handle_error("Argument too long, increase CFG_max_line_len")
+       end if
 
        n = len_trim(arg)
        if (n > 3) extension = arg(n-3:)
@@ -156,7 +171,7 @@ contains
           call parse_line(cfg, CFG_set_by_arg, arg(2:), valid_syntax)
 
           if (.not. valid_syntax) then
-             call handle_error("Invalid variable specified on command line")
+             call handle_error("Invalid syntax on command line: " // trim(arg))
           end if
        else if (arg(1:1) /= '-' .and. &
             (extension == ".cfg" .or. extension == ".txt")) then
@@ -169,6 +184,20 @@ contains
        end if
     end do
   end subroutine CFG_update_from_arguments
+
+  !> Update the configuration by parsing a line
+  subroutine CFG_update_from_line(cfg, line)
+    type(CFG_t), intent(inout)   :: cfg
+    character(len=*), intent(in) :: line
+    logical                      :: valid_syntax
+
+    ! This sets a variable
+    call parse_line(cfg, CFG_set_by_arg, line, valid_syntax)
+
+    if (.not. valid_syntax) then
+       call handle_error("CFG_set: invalid syntax")
+    end if
+  end subroutine CFG_update_from_line
 
   !> This routine will be called if an error occurs in one of the subroutines of
   !> this module.
@@ -216,11 +245,11 @@ contains
     logical :: valid_syntax
     character(len=CFG_name_len)   :: line_fmt
     character(len=CFG_string_len) :: err_string
-    character(len=CFG_string_len) :: line
+    character(len=CFG_max_line_len) :: line
     character(len=CFG_name_len)   :: category
 
     open(my_unit, file=trim(filename), status="old", action="read")
-    write(line_fmt, "(A,I0,A)") "(A", CFG_string_len, ")"
+    write(line_fmt, "(A,I0,A)") "(A", CFG_max_line_len, ")"
 
     category    = "" ! Default category is empty
     line_number = 0
@@ -228,6 +257,12 @@ contains
     do
        read(my_unit, FMT=trim(line_fmt), ERR=998, end=999) line
        line_number = line_number + 1
+
+       if (len_trim(line) > CFG_max_line_len - 2) then
+          write(err_string, *) "Possible truncation in line ", line_number, &
+               " from ", trim(filename)
+          call handle_error(err_string)
+       end if
 
        call parse_line(cfg, CFG_set_by_file, line, valid_syntax, category)
 
@@ -259,7 +294,7 @@ contains
     character(len=CFG_name_len)                          :: var_name, category
     integer                                              :: ix, equal_sign_ix
     logical                                              :: append
-    character(len=CFG_string_len)                        :: line
+    character(len=CFG_max_line_len)                      :: line
 
     valid_syntax = .true.
 
@@ -300,9 +335,13 @@ contains
     end if
 
     ! If there are less than two spaces or a tab, reset to no category
-    if (var_name(1:2) /= " " .and. var_name(1:1) /= char(9)) then
+    if (var_name(1:2) /= " " .and. var_name(1:1) /= tab_char) then
        category = ""
     end if
+
+    ! Replace leading tabs by spaces
+    ix = verify(var_name, tab_char) ! Find first non-tab character
+    var_name(1:ix-1) = ""
 
     ! Remove leading blanks
     var_name = adjustl(var_name)
@@ -1166,7 +1205,7 @@ contains
   subroutine get_fields_string(line, delims, n_max, n_found, ixs_start, ixs_end)
     !> The line from which we want to read
     character(len=*), intent(in)  :: line
-    !> A string with delimiters. For example delims = " ,'"""//char(9)
+    !> A string with delimiters. For example delims = " ,'"""//tab_char
     character(len=*), intent(in)  :: delims
     !> Maximum number of entries to read in
     integer, intent(in)           :: n_max
