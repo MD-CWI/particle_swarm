@@ -311,7 +311,7 @@ contains
        ! for all higher energies. Cross sections will be taken as constant for
        ! energies above the ones found inside the tables.
        if (cs(1, n_rows) < req_energy .and. cs(2, n_rows) > 0.0D0) then
-          write(error_unit, *) "Extrapolation required at line", nL, &
+          write(error_unit, *) "Warning: extrapolation required at line", nL, &
                " of ", trim(filename)
 
           select case (out_of_bounds_upper)
