@@ -304,11 +304,39 @@ if __name__ == '__main__':
     for i, res in enumerate(swarm_data):
         split_result = res.splitlines()
         split_result = [result for result in split_result
-                        if "warning" not in result.decode("ascii")]
+                        if "warning" not in result.decode("ascii").lower()]
+
+        if len(split_result) != n_cols:
+            print("Error: expected {} data lines but got {} for run {}".format(
+                n_cols, len(split_result), i+1), file=sys.stderr)
+            print("Output was:", file=sys.stderr)
+            for line in res.splitlines():
+                print("  ", line.decode('ascii', errors='replace'),
+                      file=sys.stderr)
+            sys.exit(1)
+
         for j, line in enumerate(split_result):
             values = line[40:].split()
-            data[i, j] = values[0]
-            sigma[i, j] = values[1]
+            if len(values) < 2:
+                print("Error: expected at least 2 values on line {} "
+                      "of run {}, got: '{}'".format(
+                          j+1, i+1,
+                          line.decode('ascii', errors='replace').strip()),
+                      file=sys.stderr)
+                sys.exit(1)
+            try:
+                data[i, j] = float(values[0])
+                sigma[i, j] = float(values[1])
+            except ValueError:
+                print("Error: could not parse numeric values on line {} "
+                      "of run {}".format(j+1, i+1), file=sys.stderr)
+                print("  Full line: '{}'".format(
+                    line.decode('ascii', errors='replace').strip()),
+                      file=sys.stderr)
+                print("  Parsed values: {}".format(
+                    [v.decode('ascii', errors='replace') for v in values]),
+                      file=sys.stderr)
+                sys.exit(1)
 
     if args.sigma:
         df = pd.DataFrame(data=np.hstack([data, sigma]),
