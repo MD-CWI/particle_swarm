@@ -26,12 +26,14 @@ module m_gas
   real(dp), protected                       :: GAS_pressure
   real(dp), protected                       :: GAS_temperature
   real(dp), protected                       :: GAS_number_dens
+  logical, protected                        :: GAS_initialized = .false.
 
   public :: GAS_initialize
   public :: GAS_get_fraction
 
 contains
 
+  !> Initialize the background gas
   subroutine GAS_initialize(comp_names, comp_fracs, pressure, temperature)
     use m_units_constants
     character(len=*), intent(in) :: comp_names(:)
@@ -54,22 +56,23 @@ contains
     ! Ideal gas law, pressure is in bar
     GAS_number_dens = 1.0D5 * GAS_pressure / &
          (UC_boltzmann_const * GAS_temperature)
+
+    ! Tell that GAS is initialized
+    GAS_initialized = .true.
   end subroutine GAS_initialize
 
+  !> Return the fraction of a gas component
   real(dp) function GAS_get_fraction(comp_name)
     character(LEN=*), intent(IN) :: comp_name
     integer                      :: ix
 
+    GAS_get_fraction = 0.0_dp
     do ix = 1, GAS_num_gases
        if (comp_name == trim(GAS_comp_names(ix))) then
           GAS_get_fraction = GAS_comp_fracs(ix)
-          return
+          exit
        end if
     end do
-
-    print *, "GAS_get_fraction: " // comp_name // " not found"
-    GAS_get_fraction = 0.0_dp
-    stop
   end function GAS_get_fraction
 
 end module m_gas
